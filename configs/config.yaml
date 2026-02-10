@@ -11,6 +11,43 @@ database:
   sslmode: "disable"
   timezone: "Asia/Shanghai"
 
+redis:
+  addr: "localhost:6379"
+  password: ""
+  db: 0
+
 jwt:
-  secret: "your_super_secret_key"
+  secret: "change-this-to-a-secure-random-string-at-least-32-characters-long"
   expire: 24
+
+# OSS 配置（可选）
+# oss:
+#   endpoint: "oss-cn-hangzhou.aliyuncs.com"
+#   access_key_id: "your_access_key_id"
+#   access_key_secret: "your_access_key_secret"
+#   bucket_name: "your_bucket_name"
+
+# 推送服务配置（可选）
+# push:
+#   access_key_id: "your_access_key_id"
+#   access_key_secret: "your_access_key_secret"
+#   app_key: 12345678
+#   region_id: "cn-hangzhou"
+
+# 支付宝配置（可选）
+# alipay:
+#   app_id: "your_app_id"
+#   private_key: "path/to/private_key.pem"
+#   public_key: "path/to/alipay_public_key.pem"
+#   notify_url: "https://yourdomain.com/payment/notify/alipay"
+#   return_url: "https://yourdomain.com/payment/return"
+#   is_production: false
+
+# 微信支付配置（可选）
+# wechat:
+#   app_id: "your_app_id"
+#   mch_id: "your_mch_id"
+#   mch_cert_serial: "your_cert_serial"
+#   mch_private_key: "path/to/apiclient_key.pem"
+#   apiv3_key: "your_apiv3_key"
+#   notify_url: "https://yourdomain.com/payment/notify/wechat"

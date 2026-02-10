@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"time"
 	"user_crud_jwt/internal/domain/user/model"
 
 	"gorm.io/gorm"
@@ -11,8 +12,9 @@ type UserRepository interface {
 	Create(user *model.User) error
 	GetByID(id string) (*model.User, error)
 	GetByUsername(username string) (*model.User, error)
-	GetAll() ([]model.User, error)
+	GetList(offset, limit int) ([]model.User, int64, error)
 	Update(user *model.User) error
+	UpdateMemberStatus(userID uint, expireAt time.Time) error
 	Delete(user *model.User) error
 }
 
@@ -49,18 +51,31 @@ func (r *userRepository) GetByUsername(username string) (*model.User, error) {
 	return &user, nil
 }
 
-// GetAll 获取所有用户
-func (r *userRepository) GetAll() ([]model.User, error) {
+// GetList 获取用户列表（分页）
+func (r *userRepository) GetList(offset, limit int) ([]model.User, int64, error) {
 	var users []model.User
-	if err := r.db.Find(&users).Error; err != nil {
-		return nil, err
+	var total int64
+
+	if err := r.db.Model(&model.User{}).Count(&total).Error; err != nil {
+		return nil, 0, err
 	}
-	return users, nil
+
+	if err := r.db.Offset(offset).Limit(limit).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+	return users, total, nil
 }
 
 // Update 更新用户
 func (r *userRepository) Update(user *model.User) error {
 	return r.db.Save(user).Error
+}
+
+func (r *userRepository) UpdateMemberStatus(userID uint, expireAt time.Time) error {
+	return r.db.Model(&model.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+		"is_member":        true,
+		"member_expire_at": expireAt,
+	}).Error
 }
 
 // Delete 删除用户

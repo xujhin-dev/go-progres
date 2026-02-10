@@ -3,7 +3,6 @@ package database
 import (
 	"fmt"
 	"log"
-	"user_crud_jwt/internal/domain/user/model"
 	"user_crud_jwt/internal/pkg/config"
 
 	"gorm.io/driver/postgres"
@@ -21,10 +20,15 @@ func InitDatabase() *gorm.DB {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	// 自动迁移用户模型
-	if err := db.AutoMigrate(&model.User{}); err != nil {
-		log.Fatalf("Failed to migrate database: %v", err)
-	}
+	// 生产环境建议使用 golang-migrate，这里保留 AutoMigrate 仅作演示或开发环境使用
+	// err = db.AutoMigrate(
+	// 	&userModel.User{},
+	// 	&couponModel.Coupon{},
+	// 	&couponModel.UserCoupon{},
+	// )
+	// if err != nil {
+	// 	log.Fatalf("Failed to migrate database: %v", err)
+	// }
 
 	return db
 }

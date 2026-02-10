@@ -8,9 +8,10 @@ import (
 )
 
 // GenerateToken 生成JWT Token
-func GenerateToken(userID uint) (string, error) {
+func GenerateToken(userID uint, role int) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
+		"role":    role,
 		"exp":     time.Now().Add(time.Hour * time.Duration(config.GlobalConfig.JWT.Expire)).Unix(),
 	}
 

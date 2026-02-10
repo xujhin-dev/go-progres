@@ -5,11 +5,21 @@
 ## 🚀 项目特性
 
 - **模块化架构**：基于 DDD 的目录结构，业务模块（如 `user`）高度内聚，易于扩展新业务（如 `mall`, `order`）。
-- **RESTful API**：标准化的 HTTP 接口设计。
+- **模块自动注册**：添加新模块只需一行代码，无需修改 main.go 的业务逻辑。
+- **RESTful API**：标准化的 HTTP 接口设计，JSON 响应使用驼峰命名。
 - **JWT 认证**：基于 `golang-jwt` 的无状态认证机制，集成中间件保护路由。
 - **配置管理**：使用 `Viper` 支持多环境配置 (YAML + 环境变量)。
 - **ORM 集成**：使用 `GORM` 进行数据库操作，支持自动迁移。
-- **依赖注入**：在入口层手动组装依赖，清晰且易于测试。
+- **依赖注入**：在模块层自动组装依赖，清晰且易于测试。
+- **完整监控**：集成 Prometheus 指标、请求追踪、健康检查。
+
+## 📚 文档
+
+- **[完整文档索引](docs/README.md)** - 所有文档的导航入口
+- **[添加新模块指南](docs/ADD_NEW_MODULE.md)** - 如何快速添加新业务模块
+- **[架构优化详解](docs/ARCHITECTURE_OPTIMIZATION.md)** - 模块自动注册机制详解
+- **[服务状态](docs/SERVICE_STATUS.md)** - 当前服务状态和使用指南
+- **[API 文档](http://localhost:8080/swagger/index.html)** - Swagger 在线文档
 
 ## 📂 目录结构
 
@@ -74,12 +84,13 @@ go run cmd/server/main.go
 
 ### 认证模块 (Auth)
 
-| 方法 | 路径 | 描述 |
-| :--- | :--- | :--- |
-| POST | `/auth/register` | 用户注册 |
-| POST | `/auth/login` | 用户登录 (返回 Token) |
+| 方法 | 路径             | 描述                  |
+| :--- | :--------------- | :-------------------- |
+| POST | `/auth/register` | 用户注册              |
+| POST | `/auth/login`    | 用户登录 (返回 Token) |
 
 **请求示例 (注册):**
+
 ```json
 {
   "username": "testuser",
@@ -90,14 +101,15 @@ go run cmd/server/main.go
 
 ### 用户模块 (User) - 需携带 Bearer Token
 
-| 方法 | 路径 | 描述 |
-| :--- | :--- | :--- |
-| GET | `/users/` | 获取所有用户 |
-| GET | `/users/:id` | 获取特定用户 |
-| PUT | `/users/:id` | 更新用户信息 |
-| DELETE | `/users/:id` | 删除用户 |
+| 方法   | 路径         | 描述         |
+| :----- | :----------- | :----------- |
+| GET    | `/users/`    | 获取所有用户 |
+| GET    | `/users/:id` | 获取特定用户 |
+| PUT    | `/users/:id` | 更新用户信息 |
+| DELETE | `/users/:id` | 删除用户     |
 
 **Header:**
+
 ```
 Authorization: Bearer <your_token_here>
 ```
@@ -111,4 +123,5 @@ Authorization: Bearer <your_token_here>
 5.  在 `cmd/server/main.go` 中调用 `SetupMallRoutes`。
 
 ---
+
 **Happy Coding!** 🚀
