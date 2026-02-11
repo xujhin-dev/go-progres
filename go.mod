@@ -5,7 +5,6 @@ go 1.24.0
 require (
 	github.com/aliyun/alibaba-cloud-sdk-go v1.63.107
 	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible
-	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.10.1
 	github.com/golang-jwt/jwt/v5 v5.2.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
@@ -15,12 +14,9 @@ require (
 	github.com/smartwalle/alipay/v3 v3.2.20
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
-	github.com/swaggo/files v1.0.1
-	github.com/swaggo/gin-swagger v1.6.1
 	github.com/swaggo/swag v1.16.6
 	github.com/wechatpay-apiv3/wechatpay-go v0.2.21
 	go.uber.org/zap v1.27.1
-	golang.org/x/crypto v0.48.0
 	golang.org/x/time v0.14.0
 	gorm.io/driver/postgres v1.5.6
 	gorm.io/gorm v1.25.7
@@ -91,6 +87,7 @@ require (
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/arch v0.18.0 // indirect
+	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/mod v0.33.0 // indirect
 	golang.org/x/net v0.50.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
