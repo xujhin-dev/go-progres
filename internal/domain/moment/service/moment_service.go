@@ -10,18 +10,18 @@ import (
 )
 
 type MomentService interface {
-	PublishPost(userID uint, content string, mediaURLs []string, postType string, topicNames []string) (*model.Post, error)
-	AuditPost(postID uint, status string) error
+	PublishPost(userID string, content string, mediaURLs []string, postType string, topicNames []string) (*model.Post, error)
+	AuditPost(postID string, status string) error
 	GetFeed(page, limit int) ([]model.Post, int64, error) // Get approved posts
 	GetPendingPosts(page, limit int) ([]model.Post, int64, error) // For admin
 
-	AddComment(userID, postID uint, content string, parentID uint) (*model.Comment, error)
-	GetPostComments(postID uint, page, limit int) ([]model.Comment, int64, error)
+	AddComment(userID, postID string, content string, parentID string) (*model.Comment, error)
+	GetPostComments(postID string, page, limit int) ([]model.Comment, int64, error)
 
-	ToggleLike(userID, targetID uint, targetType string) (bool, error) // Returns true if liked, false if unliked
+	ToggleLike(userID, targetID string, targetType string) (bool, error) // Returns true if liked, false if unliked
 
 	GetTopicList(keyword string, page, limit int) ([]model.Topic, int64, error)
-	DeleteTopic(id uint) error
+	DeleteTopic(id string) error
 }
 
 type momentService struct {
@@ -32,7 +32,7 @@ func NewMomentService(repo repository.MomentRepository) MomentService {
 	return &momentService{repo: repo}
 }
 
-func (s *momentService) PublishPost(userID uint, content string, mediaURLs []string, postType string, topicNames []string) (*model.Post, error) {
+func (s *momentService) PublishPost(userID string, content string, mediaURLs []string, postType string, topicNames []string) (*model.Post, error) {
 	// 1. Prepare Media JSON
 	mediaJSON, _ := json.Marshal(mediaURLs)
 
@@ -68,7 +68,7 @@ func (s *momentService) PublishPost(userID uint, content string, mediaURLs []str
 	return post, nil
 }
 
-func (s *momentService) AuditPost(postID uint, status string) error {
+func (s *momentService) AuditPost(postID string, status string) error {
 	if status != "approved" && status != "rejected" {
 		return errors.New("invalid status")
 	}
@@ -85,7 +85,7 @@ func (s *momentService) GetPendingPosts(page, limit int) ([]model.Post, int64, e
 	return s.repo.GetPosts("pending", offset, limit)
 }
 
-func (s *momentService) AddComment(userID, postID uint, content string, parentID uint) (*model.Comment, error) {
+func (s *momentService) AddComment(userID, postID string, content string, parentID string) (*model.Comment, error) {
 	// Check if post exists and is approved
 	post, err := s.repo.GetPostByID(postID)
 	if err != nil {
@@ -103,7 +103,7 @@ func (s *momentService) AddComment(userID, postID uint, content string, parentID
 	}
 
 	// 处理回复逻辑
-	if parentID != 0 {
+	if parentID != "" {
 		// 获取父评论
 		parentComment, err := s.repo.GetCommentByID(parentID)
 		if err != nil {
@@ -135,12 +135,12 @@ func (s *momentService) AddComment(userID, postID uint, content string, parentID
 	return comment, nil
 }
 
-func (s *momentService) GetPostComments(postID uint, page, limit int) ([]model.Comment, int64, error) {
+func (s *momentService) GetPostComments(postID string, page, limit int) ([]model.Comment, int64, error) {
 	offset := (page - 1) * limit
 	return s.repo.GetCommentsByPostID(postID, offset, limit)
 }
 
-func (s *momentService) ToggleLike(userID, targetID uint, targetType string) (bool, error) {
+func (s *momentService) ToggleLike(userID, targetID string, targetType string) (bool, error) {
 	liked, err := s.repo.HasLiked(userID, targetID, targetType)
 	if err != nil {
 		return false, err
@@ -167,6 +167,6 @@ func (s *momentService) GetTopicList(keyword string, page, limit int) ([]model.T
 	return s.repo.GetTopics(keyword, offset, limit)
 }
 
-func (s *momentService) DeleteTopic(id uint) error {
+func (s *momentService) DeleteTopic(id string) error {
 	return s.repo.DeleteTopic(id)
 }

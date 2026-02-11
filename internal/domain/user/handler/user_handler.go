@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 	"user_crud_jwt/internal/domain/user/service"
 	"user_crud_jwt/pkg/response"
 	"user_crud_jwt/pkg/utils"
@@ -10,77 +9,71 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// UserHandler 用户处理器
 type UserHandler struct {
 	service service.UserService
 }
 
-// NewUserHandler 创建处理器
 func NewUserHandler(service service.UserService) *UserHandler {
 	return &UserHandler{service: service}
 }
 
-// RegisterInput 注册输入
-type RegisterInput struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
-	Email    string `json:"email" binding:"required,email"`
+type LoginInput struct {
+	Mobile string `json:"mobile" binding:"required,len=11"`
+	Code   string `json:"code" binding:"required,len=6"`
 }
 
-type LoginInput struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
+type OTPInput struct {
+	Mobile string `json:"mobile" binding:"required,len=11"`
 }
 
 type UpdateUserInput struct {
-	Username string `json:"username"`
-	Email    string `json:"email" binding:"omitempty,email"`
+	Nickname  string `json:"nickname"`
+	AvatarURL string `json:"avatar_url"`
 }
 
-type ChangePasswordInput struct {
-	OldPassword string `json:"oldPassword" binding:"required"`
-	NewPassword string `json:"newPassword" binding:"required,min=6"`
-}
-
-// Register 处理注册请求
-// @Summary 用户注册
-// @Description 注册新用户
+// LoginOrRegister 登录/注册
+// @Summary 手机号验证码登录
 // @Tags Auth
 // @Accept json
 // @Produce json
-// @Param input body RegisterInput true "注册信息"
-// @Success 200 {string} string "Registration successful"
-// @Router /auth/register [post]
-func (h *UserHandler) Register(c *gin.Context) {
-	var input RegisterInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		response.Error(c, http.StatusBadRequest, response.ErrInvalidParam, err.Error())
-		return
-	}
-
-	if err := h.service.Register(input.Username, input.Password, input.Email); err != nil {
-		response.Error(c, http.StatusInternalServerError, response.ErrUserExists, err.Error())
-		return
-	}
-
-	response.Success(c, "Registration successful")
-}
-
-// Login 处理登录请求
-func (h *UserHandler) Login(c *gin.Context) {
+// @Param input body LoginInput true "登录信息"
+// @Success 200 {object} response.Response{data=string} "Token"
+// @Router /auth/login [post]
+func (h *UserHandler) LoginOrRegister(c *gin.Context) {
 	var input LoginInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		response.Error(c, http.StatusBadRequest, response.ErrInvalidParam, err.Error())
 		return
 	}
 
-	token, err := h.service.Login(input.Username, input.Password)
+	token, err := h.service.LoginOrRegister(input.Mobile, input.Code)
 	if err != nil {
-		response.Error(c, http.StatusUnauthorized, response.ErrPasswordWrong, err.Error())
+		response.Error(c, http.StatusUnauthorized, response.ErrAuthFailed, err.Error())
+		return
+	}
+	response.Success(c, token)
+}
+
+// SendOTP 发送验证码
+// @Summary 发送验证码
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param input body OTPInput true "手机号"
+// @Success 200 {string} string "success"
+// @Router /auth/otp [post]
+func (h *UserHandler) SendOTP(c *gin.Context) {
+	var input OTPInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		response.Error(c, http.StatusBadRequest, response.ErrInvalidParam, err.Error())
 		return
 	}
 
-	response.Success(c, gin.H{"token": token})
+	if err := h.service.SendOTP(input.Mobile); err != nil {
+		response.Error(c, http.StatusInternalServerError, response.ErrServerInternal, err.Error())
+		return
+	}
+	response.Success(c, "success")
 }
 
 // GetUsers 获取所有用户
@@ -148,13 +141,6 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	currentUserID := getUserIdFromContext(c)
 	role, _ := c.Get("role")
 
-	// 将 id 转换为 uint 进行比较
-	targetID, err := strconv.ParseUint(id, 10, 64)
-	if err != nil {
-		response.Error(c, http.StatusBadRequest, response.ErrInvalidParam, "Invalid user ID")
-		return
-	}
-
 	isAdmin := false
 	switch v := role.(type) {
 	case float64:
@@ -163,12 +149,12 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		isAdmin = v == 1
 	}
 
-	if uint(targetID) != currentUserID && !isAdmin {
+	if id != currentUserID && !isAdmin {
 		response.Error(c, http.StatusForbidden, response.ErrNoPermission, "You can only update your own information")
 		return
 	}
 
-	user, err := h.service.UpdateUser(id, input.Username, input.Email)
+	user, err := h.service.UpdateUser(id, input.Nickname, input.AvatarURL)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, response.ErrServerInternal, "Failed to update user")
 		return
@@ -184,13 +170,6 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	currentUserID := getUserIdFromContext(c)
 	role, _ := c.Get("role")
 
-	// 将 id 转换为 uint 进行比较
-	targetID, err := strconv.ParseUint(id, 10, 64)
-	if err != nil {
-		response.Error(c, http.StatusBadRequest, response.ErrInvalidParam, "Invalid user ID")
-		return
-	}
-
 	isAdmin := false
 	switch v := role.(type) {
 	case float64:
@@ -199,7 +178,7 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		isAdmin = v == 1
 	}
 
-	if uint(targetID) != currentUserID && !isAdmin {
+	if id != currentUserID && !isAdmin {
 		response.Error(c, http.StatusForbidden, response.ErrNoPermission, "You can only delete your own account")
 		return
 	}
@@ -211,43 +190,12 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	response.Success(c, "User deleted successfully")
 }
 
-func getUserIdFromContext(c *gin.Context) uint {
+func getUserIdFromContext(c *gin.Context) string {
 	val, _ := c.Get("userID")
-	switch v := val.(type) {
-	case uint:
-		return v
-	case float64:
-		return uint(v)
-	case int:
-		return uint(v)
-	default:
-		return 0
+	if str, ok := val.(string); ok {
+		return str
 	}
+	return ""
 }
 
-// ChangePassword 修改密码
-// @Summary 修改密码
-// @Tags User
-// @Accept json
-// @Produce json
-// @Param input body ChangePasswordInput true "密码信息"
-// @Success 200 {string} string "Password changed successfully"
-// @Router /users/password [put]
-func (h *UserHandler) ChangePassword(c *gin.Context) {
-	var input ChangePasswordInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		response.Error(c, http.StatusBadRequest, response.ErrInvalidParam, err.Error())
-		return
-	}
 
-	userID := getUserIdFromContext(c)
-	if err := h.service.ChangePassword(userID, input.OldPassword, input.NewPassword); err != nil {
-		if err.Error() == "invalid old password" {
-			response.Error(c, http.StatusBadRequest, response.ErrPasswordWrong, "Invalid old password")
-			return
-		}
-		response.Error(c, http.StatusInternalServerError, response.ErrServerInternal, "Failed to change password")
-		return
-	}
-	response.Success(c, "Password changed successfully")
-}

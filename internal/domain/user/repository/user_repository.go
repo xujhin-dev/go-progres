@@ -12,9 +12,10 @@ type UserRepository interface {
 	Create(user *model.User) error
 	GetByID(id string) (*model.User, error)
 	GetByUsername(username string) (*model.User, error)
+	GetByMobile(mobile string) (*model.User, error)
 	GetList(offset, limit int) ([]model.User, int64, error)
 	Update(user *model.User) error
-	UpdateMemberStatus(userID uint, expireAt time.Time) error
+	UpdateMemberStatus(userID string, expireAt time.Time) error
 	Delete(user *model.User) error
 }
 
@@ -51,6 +52,15 @@ func (r *userRepository) GetByUsername(username string) (*model.User, error) {
 	return &user, nil
 }
 
+// GetByMobile 根据手机号获取用户
+func (r *userRepository) GetByMobile(mobile string) (*model.User, error) {
+	var user model.User
+	if err := r.db.Where("mobile = ?", mobile).First(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 // GetList 获取用户列表（分页）
 func (r *userRepository) GetList(offset, limit int) ([]model.User, int64, error) {
 	var users []model.User
@@ -71,7 +81,7 @@ func (r *userRepository) Update(user *model.User) error {
 	return r.db.Save(user).Error
 }
 
-func (r *userRepository) UpdateMemberStatus(userID uint, expireAt time.Time) error {
+func (r *userRepository) UpdateMemberStatus(userID string, expireAt time.Time) error {
 	return r.db.Model(&model.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
 		"is_member":        true,
 		"member_expire_at": expireAt,

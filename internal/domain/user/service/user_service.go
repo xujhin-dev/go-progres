@@ -5,62 +5,62 @@ import (
 	"time"
 	"user_crud_jwt/internal/domain/user/model"
 	"user_crud_jwt/internal/domain/user/repository"
+	"user_crud_jwt/internal/pkg/otp"
 	"user_crud_jwt/pkg/utils"
 
-	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 // UserService 用户服务接口
 type UserService interface {
-	Register(username, password, email string) error
-	Login(username, password string) (string, error)
+	LoginOrRegister(mobile, code string) (string, error)
+	SendOTP(mobile string) error
 	GetUsers(page, limit int) ([]model.User, int64, error)
 	GetUser(id string) (*model.User, error)
-	UpdateUser(id string, username, email string) (*model.User, error)
-	ChangePassword(userID uint, oldPassword, newPassword string) error
-	UpgradeMember(userID uint, duration time.Duration) error
+	UpdateUser(id string, nickname, avatarURL string) (*model.User, error)
+	UpgradeMember(userID string, duration time.Duration) error
 	DeleteUser(id string) error
 }
 
 // userService 实现
 type userService struct {
 	repo repository.UserRepository
+	otp  otp.OTPService
 }
 
 // NewUserService 创建用户服务
-func NewUserService(repo repository.UserRepository) UserService {
-	return &userService{repo: repo}
+func NewUserService(repo repository.UserRepository, otp otp.OTPService) UserService {
+	return &userService{repo: repo, otp: otp}
 }
 
-// Register 用户注册
-func (s *userService) Register(username, password, email string) error {
-	// 密码加密
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+// LoginOrRegister 登录或注册
+func (s *userService) LoginOrRegister(mobile, code string) (string, error) {
+	// 1. 验证验证码
+	if !s.otp.Verify(mobile, code) {
+		return "", errors.New("invalid verification code")
+	}
+
+	// 2. 查询用户是否存在
+	user, err := s.repo.GetByMobile(mobile)
 	if err != nil {
-		return err
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// 3. 不存在则注册
+			user = &model.User{
+				Mobile:   mobile,
+				Nickname: "User_" + mobile[len(mobile)-4:], // 默认昵称
+				Role:     model.RoleUser,
+			}
+			if err := s.repo.Create(user); err != nil {
+				return "", err
+			}
+		} else {
+			return "", err
+		}
 	}
 
-	user := &model.User{
-		Username: username,
-		Password: string(hashedPassword),
-		Email:    email,
-		Role:     model.RoleUser, // 默认为普通用户
-	}
-
-	return s.repo.Create(user)
-}
-
-// Login 用户登录
-func (s *userService) Login(username, password string) (string, error) {
-	user, err := s.repo.GetByUsername(username)
-	if err != nil {
-		return "", errors.New("invalid username or password")
-	}
-
-	// 检查用户状态
+	// 4. 检查用户状态
 	if user.Status == model.StatusBanned {
 		if user.BannedUntil != nil && time.Now().After(*user.BannedUntil) {
-			// 封禁已过期，自动解封
 			user.Status = model.StatusNormal
 			user.BannedUntil = nil
 			s.repo.Update(user)
@@ -72,13 +72,13 @@ func (s *userService) Login(username, password string) (string, error) {
 		return "", errors.New("account has been deleted")
 	}
 
-	// 验证密码
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-		return "", errors.New("invalid username or password")
-	}
-
-	// 生成Token (包含角色)
+	// 5. 生成 Token
 	return utils.GenerateToken(user.ID, user.Role)
+}
+
+func (s *userService) SendOTP(mobile string) error {
+	_, err := s.otp.Send(mobile)
+	return err
 }
 
 // GetUsers 获取用户列表（分页）
@@ -99,14 +99,14 @@ func (s *userService) GetUser(id string) (*model.User, error) {
 }
 
 // UpdateUser 更新用户
-func (s *userService) UpdateUser(id string, username, email string) (*model.User, error) {
+func (s *userService) UpdateUser(id string, nickname, avatarURL string) (*model.User, error) {
 	user, err := s.repo.GetByID(id)
 	if err != nil {
 		return nil, err
 	}
 
-	user.Username = username
-	user.Email = email
+	user.Nickname = nickname
+	user.AvatarURL = avatarURL
 
 	if err := s.repo.Update(user); err != nil {
 		return nil, err
@@ -114,31 +114,9 @@ func (s *userService) UpdateUser(id string, username, email string) (*model.User
 	return user, nil
 }
 
-func (s *userService) UpgradeMember(userID uint, duration time.Duration) error {
+func (s *userService) UpgradeMember(userID string, duration time.Duration) error {
 	expireAt := time.Now().Add(duration)
 	return s.repo.UpdateMemberStatus(userID, expireAt)
-}
-
-// ChangePassword 修改密码
-func (s *userService) ChangePassword(userID uint, oldPassword, newPassword string) error {
-	user, err := s.repo.GetByID(string(userID))
-	if err != nil {
-		return err
-	}
-
-	// 验证旧密码
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPassword)); err != nil {
-		return errors.New("invalid old password")
-	}
-
-	// 加密新密码
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-
-	user.Password = string(hashedPassword)
-	return s.repo.Update(user)
 }
 
 // DeleteUser 删除用户（软删除，标记为已注销）

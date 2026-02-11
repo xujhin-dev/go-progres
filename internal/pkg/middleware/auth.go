@@ -9,7 +9,6 @@ import (
 	"user_crud_jwt/pkg/utils"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 // AuthMiddleware JWT认证中间件
@@ -31,19 +30,16 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		tokenString := parts[1]
-		token, err := utils.ParseToken(tokenString)
-		if err != nil || !token.Valid {
+		claims, err := utils.ParseToken(tokenString)
+		if err != nil {
 			response.Error(c, http.StatusUnauthorized, response.ErrTokenInvalid, "Invalid or expired token")
 			c.Abort()
 			return
 		}
 
-		// 将 userID 和 role 存入上下文
-		if claims, ok := token.Claims.(jwt.MapClaims); ok {
-			c.Set("userID", claims["user_id"])
-			c.Set("role", claims["role"])
-		}
-
+		// 将用户信息存入上下文
+		c.Set("userID", claims.UserID)
+		c.Set("role", claims.Role)
 		c.Next()
 	}
 }

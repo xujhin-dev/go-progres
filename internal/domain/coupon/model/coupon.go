@@ -19,7 +19,7 @@ type Coupon struct {
 // UserCoupon 用户领取的优惠券
 type UserCoupon struct {
 	baseModel.BaseModel
-	UserID   uint `gorm:"index;not null" json:"userId"`
-	CouponID uint `gorm:"index;not null" json:"couponId"`
-	Status   int  `gorm:"default:1" json:"status"` // 1:未使用, 2:已使用, 3:已过期
+	UserID   string `gorm:"type:uuid;index;not null" json:"userId"`
+	CouponID string `gorm:"type:uuid;index;not null" json:"couponId"`
+	Status   int    `gorm:"default:1" json:"status"` // 1:未使用, 2:已使用, 3:已过期
 }

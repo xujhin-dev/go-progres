@@ -15,7 +15,7 @@ import (
 )
 
 type PaymentService interface {
-	CreateOrder(userID uint, amount float64, channel, subject string) (*model.Order, string, error)
+	CreateOrder(userID string, amount float64, channel, subject string) (*model.Order, string, error)
 	HandleNotify(channel string, params interface{}) error
 	RegisterStrategy(channel string, strategy strategy.PaymentStrategy)
 }
@@ -39,7 +39,7 @@ func (s *paymentService) RegisterStrategy(channel string, strategy strategy.Paym
 	s.strategies[channel] = strategy
 }
 
-func (s *paymentService) CreateOrder(userID uint, amount float64, channel, subject string) (*model.Order, string, error) {
+func (s *paymentService) CreateOrder(userID string, amount float64, channel, subject string) (*model.Order, string, error) {
 	strategy, ok := s.strategies[channel]
 	if !ok {
 		return nil, "", errors.New("unsupported payment channel")
@@ -116,9 +116,8 @@ func (s *paymentService) HandleNotify(channel string, params interface{}) error 
 	if push.GlobalPushService != nil {
 		title := "支付成功"
 		body := fmt.Sprintf("您的订单 %s 已支付成功，会员权益已生效。", orderNo)
-		// 使用 PushToAccount (假设 UserID 转 string 就是 AccountID)
-		accountID := fmt.Sprintf("%d", order.UserID)
-		go push.GlobalPushService.PushToAccount(accountID, title, body, nil)
+		// 使用 PushToAccount (假设 UserID 就是 AccountID)
+		go push.GlobalPushService.PushToAccount(order.UserID, title, body, nil)
 	}
 
 	return nil

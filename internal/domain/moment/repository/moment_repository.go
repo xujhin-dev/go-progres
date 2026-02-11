@@ -8,22 +8,22 @@ import (
 
 type MomentRepository interface {
 	CreatePost(post *model.Post) error
-	GetPostByID(id uint) (*model.Post, error)
+	GetPostByID(id string) (*model.Post, error)
 	GetPosts(status string, offset, limit int) ([]model.Post, int64, error)
-	UpdatePostStatus(id uint, status string) error
+	UpdatePostStatus(id string, status string) error
 
 	CreateComment(comment *model.Comment) error
-	GetCommentByID(id uint) (*model.Comment, error)
-	GetCommentsByPostID(postID uint, offset, limit int) ([]model.Comment, int64, error)
+	GetCommentByID(id string) (*model.Comment, error)
+	GetCommentsByPostID(postID string, offset, limit int) ([]model.Comment, int64, error)
 
 	CreateLike(like *model.Like) error
-	DeleteLike(userID, targetID uint, targetType string) error
-	HasLiked(userID, targetID uint, targetType string) (bool, error)
+	DeleteLike(userID, targetID string, targetType string) error
+	HasLiked(userID, targetID string, targetType string) (bool, error)
 
 	GetTopicByName(name string) (*model.Topic, error)
 	CreateTopic(topic *model.Topic) error
 	GetTopics(keyword string, offset, limit int) ([]model.Topic, int64, error)
-	DeleteTopic(id uint) error
+	DeleteTopic(id string) error
 }
 
 type momentRepository struct {
@@ -40,9 +40,9 @@ func (r *momentRepository) CreatePost(post *model.Post) error {
 	return r.db.Create(post).Error
 }
 
-func (r *momentRepository) GetPostByID(id uint) (*model.Post, error) {
+func (r *momentRepository) GetPostByID(id string) (*model.Post, error) {
 	var post model.Post
-	if err := r.db.Preload("Topics").First(&post, id).Error; err != nil {
+	if err := r.db.Preload("Topics").Where("id = ?", id).First(&post).Error; err != nil {
 		return nil, err
 	}
 	return &post, nil
@@ -67,7 +67,7 @@ func (r *momentRepository) GetPosts(status string, offset, limit int) ([]model.P
 	return posts, total, nil
 }
 
-func (r *momentRepository) UpdatePostStatus(id uint, status string) error {
+func (r *momentRepository) UpdatePostStatus(id string, status string) error {
 	return r.db.Model(&model.Post{}).Where("id = ?", id).Update("status", status).Error
 }
 
@@ -77,15 +77,15 @@ func (r *momentRepository) CreateComment(comment *model.Comment) error {
 	return r.db.Create(comment).Error
 }
 
-func (r *momentRepository) GetCommentByID(id uint) (*model.Comment, error) {
+func (r *momentRepository) GetCommentByID(id string) (*model.Comment, error) {
 	var comment model.Comment
-	if err := r.db.First(&comment, id).Error; err != nil {
+	if err := r.db.Where("id = ?", id).First(&comment).Error; err != nil {
 		return nil, err
 	}
 	return &comment, nil
 }
 
-func (r *momentRepository) GetCommentsByPostID(postID uint, offset, limit int) ([]model.Comment, int64, error) {
+func (r *momentRepository) GetCommentsByPostID(postID string, offset, limit int) ([]model.Comment, int64, error) {
 	var comments []model.Comment
 	var total int64
 
@@ -107,11 +107,11 @@ func (r *momentRepository) CreateLike(like *model.Like) error {
 	return r.db.Create(like).Error
 }
 
-func (r *momentRepository) DeleteLike(userID, targetID uint, targetType string) error {
+func (r *momentRepository) DeleteLike(userID, targetID string, targetType string) error {
 	return r.db.Where("user_id = ? AND target_id = ? AND target_type = ?", userID, targetID, targetType).Delete(&model.Like{}).Error
 }
 
-func (r *momentRepository) HasLiked(userID, targetID uint, targetType string) (bool, error) {
+func (r *momentRepository) HasLiked(userID, targetID string, targetType string) (bool, error) {
 	var count int64
 	err := r.db.Model(&model.Like{}).Where("user_id = ? AND target_id = ? AND target_type = ?", userID, targetID, targetType).Count(&count).Error
 	return count > 0, err
@@ -150,6 +150,6 @@ func (r *momentRepository) GetTopics(keyword string, offset, limit int) ([]model
 	return topics, total, nil
 }
 
-func (r *momentRepository) DeleteTopic(id uint) error {
-	return r.db.Delete(&model.Topic{}, id).Error
+func (r *momentRepository) DeleteTopic(id string) error {
+	return r.db.Where("id = ?", id).Delete(&model.Topic{}).Error
 }

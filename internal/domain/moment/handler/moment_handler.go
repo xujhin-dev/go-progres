@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 	"user_crud_jwt/internal/domain/moment/service"
 	"user_crud_jwt/pkg/response"
 	"user_crud_jwt/pkg/utils"
@@ -34,12 +33,12 @@ type AuditInput struct {
 // CommentInput 评论输入
 type CommentInput struct {
 	Content  string `json:"content" binding:"required"`
-	ParentID uint   `json:"parentId"`
+	ParentID string `json:"parentId"`
 }
 
 // LikeInput 点赞输入
 type LikeInput struct {
-	TargetID   uint   `json:"targetId" binding:"required"`
+	TargetID   string `json:"targetId" binding:"required"`
 	TargetType string `json:"targetType" binding:"required,oneof=post comment"`
 }
 
@@ -72,13 +71,12 @@ func (h *MomentHandler) PublishPost(c *gin.Context) {
 // @Tags Moment
 // @Accept json
 // @Produce json
-// @Param id path int true "动态ID"
+// @Param id path string true "动态ID"
 // @Param input body AuditInput true "审核状态"
 // @Success 200 {string} string "success"
 // @Router /moments/{id}/audit [put]
 func (h *MomentHandler) AuditPost(c *gin.Context) {
-	idStr := c.Param("id")
-	id, _ := strconv.ParseUint(idStr, 10, 64)
+	id := c.Param("id")
 
 	var input AuditInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -86,7 +84,7 @@ func (h *MomentHandler) AuditPost(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.AuditPost(uint(id), input.Status); err != nil {
+	if err := h.service.AuditPost(id, input.Status); err != nil {
 		response.Error(c, http.StatusInternalServerError, response.ErrServerInternal, err.Error())
 		return
 	}
@@ -120,8 +118,7 @@ func (h *MomentHandler) GetFeed(c *gin.Context) {
 
 // AddComment 发表评论
 func (h *MomentHandler) AddComment(c *gin.Context) {
-	postIDStr := c.Param("id")
-	postID, _ := strconv.ParseUint(postIDStr, 10, 64)
+	postID := c.Param("id")
 
 	var input CommentInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -130,7 +127,7 @@ func (h *MomentHandler) AddComment(c *gin.Context) {
 	}
 
 	userID := getUserIdFromContext(c)
-	comment, err := h.service.AddComment(userID, uint(postID), input.Content, input.ParentID)
+	comment, err := h.service.AddComment(userID, postID, input.Content, input.ParentID)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, response.ErrServerInternal, err.Error())
 		return
@@ -140,13 +137,12 @@ func (h *MomentHandler) AddComment(c *gin.Context) {
 
 // GetComments 获取评论列表
 func (h *MomentHandler) GetComments(c *gin.Context) {
-	postIDStr := c.Param("id")
-	postID, _ := strconv.ParseUint(postIDStr, 10, 64)
+	postID := c.Param("id")
 
 	var p utils.Pagination
 	c.ShouldBindQuery(&p)
 
-	comments, total, err := h.service.GetPostComments(uint(postID), p.Page, p.Limit)
+	comments, total, err := h.service.GetPostComments(postID, p.Page, p.Limit)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, response.ErrServerInternal, err.Error())
 		return
@@ -212,32 +208,23 @@ func (h *MomentHandler) GetTopics(c *gin.Context) {
 // DeleteTopic 删除话题 (管理员)
 // @Summary 删除话题
 // @Tags Moment
-// @Param id path int true "Topic ID"
+// @Param id path string true "Topic ID"
 // @Success 200 {string} string "success"
 // @Router /moments/topics/{id} [delete]
 func (h *MomentHandler) DeleteTopic(c *gin.Context) {
-	idStr := c.Param("id")
-	id, _ := strconv.ParseUint(idStr, 10, 64)
+	id := c.Param("id")
 
-	if err := h.service.DeleteTopic(uint(id)); err != nil {
+	if err := h.service.DeleteTopic(id); err != nil {
 		response.Error(c, http.StatusInternalServerError, response.ErrServerInternal, err.Error())
 		return
 	}
 	response.Success(c, "success")
 }
 
-func getUserIdFromContext(c *gin.Context) uint {
-	// 这里的类型转换逻辑应与中间件保持一致
-	// 假设中间件已确保 userID 存在且有效
+func getUserIdFromContext(c *gin.Context) string {
 	val, _ := c.Get("userID")
-	switch v := val.(type) {
-	case uint:
-		return v
-	case float64:
-		return uint(v)
-	case int:
-		return uint(v)
-	default:
-		return 0
+	if str, ok := val.(string); ok {
+		return str
 	}
+	return ""
 }

@@ -5,6 +5,7 @@ import (
 	"user_crud_jwt/internal/domain/user/repository"
 	"user_crud_jwt/internal/domain/user/service"
 	"user_crud_jwt/internal/pkg/middleware"
+	"user_crud_jwt/internal/pkg/otp"
 	"user_crud_jwt/internal/pkg/registry"
 
 	"github.com/gin-gonic/gin"
@@ -30,7 +31,8 @@ func (m *UserModule) Priority() int {
 func (m *UserModule) Init(ctx *registry.ModuleContext) error {
 	// 1. 依赖注入
 	userRepo := repository.NewUserRepository(ctx.DB)
-	userService := service.NewUserService(userRepo)
+	otpService := otp.NewOTPService(ctx.Redis) // 假设 ModuleContext 中有 Redis 客户端
+	userService := service.NewUserService(userRepo, otpService)
 	userHandler := handler.NewUserHandler(userService)
 
 	// 2. 路由注册
@@ -43,8 +45,8 @@ func setupRoutes(r *gin.Engine, h *handler.UserHandler) {
 	// 公开路由
 	authGroup := r.Group("/auth")
 	{
-		authGroup.POST("/register", h.Register)
-		authGroup.POST("/login", h.Login)
+		authGroup.POST("/login", h.LoginOrRegister) // 登录/注册
+		authGroup.POST("/otp", h.SendOTP)           // 发送验证码
 	}
 
 	// 受保护的路由
@@ -55,6 +57,5 @@ func setupRoutes(r *gin.Engine, h *handler.UserHandler) {
 		userGroup.GET("/:id", h.GetUser)
 		userGroup.PUT("/:id", h.UpdateUser)
 		userGroup.DELETE("/:id", h.DeleteUser)
-		userGroup.PUT("/password", h.ChangePassword)
 	}
 }

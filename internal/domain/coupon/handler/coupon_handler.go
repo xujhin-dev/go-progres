@@ -43,11 +43,7 @@ func (h *CouponHandler) CreateCoupon(c *gin.Context) {
 }
 
 func (h *CouponHandler) ClaimCoupon(c *gin.Context) {
-	couponID, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		response.Error(c, http.StatusBadRequest, response.ErrInvalidParam, "Invalid coupon ID")
-		return
-	}
+	couponID := c.Param("id")
 
 	// 从 Context 中获取当前登录用户 ID (由 AuthMiddleware 设置)
 	userID, exists := c.Get("userID")
@@ -56,19 +52,14 @@ func (h *CouponHandler) ClaimCoupon(c *gin.Context) {
 		return
 	}
 
-	// 类型断言
-	uid, ok := userID.(float64)
+	// 类型断言为 string
+	uid, ok := userID.(string)
 	if !ok {
-		// 尝试转 int (取决于 JWT 解析后的类型)
-		if uidInt, ok := userID.(int); ok {
-			uid = float64(uidInt)
-		} else {
-			response.Error(c, http.StatusInternalServerError, response.ErrServerInternal, "Invalid user ID type")
-			return
-		}
+		response.Error(c, http.StatusInternalServerError, response.ErrServerInternal, "Invalid user ID type")
+		return
 	}
 
-	if err := h.service.ClaimCoupon(uint(uid), uint(couponID)); err != nil {
+	if err := h.service.ClaimCoupon(uid, couponID); err != nil {
 		if err.Error() == "coupon out of stock" || err.Error() == "coupon out of stock (local cache)" {
 			response.Fail(c, response.ErrCouponOutOfStock, "Coupon out of stock")
 			return
@@ -86,8 +77,8 @@ func (h *CouponHandler) ClaimCoupon(c *gin.Context) {
 
 // SendCouponInput 管理员发券输入
 type SendCouponInput struct {
-	UserID   uint `json:"userId" binding:"required"`
-	CouponID uint `json:"couponId" binding:"required"`
+	UserID   string `json:"userId" binding:"required"`
+	CouponID string `json:"couponId" binding:"required"`
 }
 
 // SendCoupon 管理员给指定用户发券

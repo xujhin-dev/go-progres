@@ -10,7 +10,7 @@ import (
 type Order struct {
 	baseModel.BaseModel
 	OrderNo     string          `gorm:"unique;not null" json:"orderNo"`
-	UserID      uint            `json:"userId"`
+	UserID      string          `gorm:"type:uuid" json:"userId"`
 	Amount      float64         `json:"amount"`
 	Status      string          `gorm:"default:'pending'" json:"status"` // pending, paid, cancelled, refunded
 	Channel     string          `json:"channel"`                         // alipay, wechat

@@ -9,10 +9,10 @@ import (
 
 type CouponRepository interface {
 	Create(coupon *model.Coupon) error
-	GetByID(id uint) (*model.Coupon, error)
-	DecreaseStock(couponID uint) error
+	GetByID(id string) (*model.Coupon, error)
+	DecreaseStock(couponID string) error
 	CreateUserCoupon(userCoupon *model.UserCoupon) error
-	HasUserClaimed(userID, couponID uint) (bool, error)
+	HasUserClaimed(userID, couponID string) (bool, error)
 }
 
 type couponRepository struct {
@@ -27,16 +27,16 @@ func (r *couponRepository) Create(coupon *model.Coupon) error {
 	return r.db.Create(coupon).Error
 }
 
-func (r *couponRepository) GetByID(id uint) (*model.Coupon, error) {
+func (r *couponRepository) GetByID(id string) (*model.Coupon, error) {
 	var coupon model.Coupon
-	if err := r.db.First(&coupon, id).Error; err != nil {
+	if err := r.db.Where("id = ?", id).First(&coupon).Error; err != nil {
 		return nil, err
 	}
 	return &coupon, nil
 }
 
 // DecreaseStock 乐观锁扣减库存
-func (r *couponRepository) DecreaseStock(couponID uint) error {
+func (r *couponRepository) DecreaseStock(couponID string) error {
 	result := r.db.Model(&model.Coupon{}).
 		Where("id = ? AND stock > 0", couponID).
 		UpdateColumn("stock", gorm.Expr("stock - 1"))
@@ -54,7 +54,7 @@ func (r *couponRepository) CreateUserCoupon(userCoupon *model.UserCoupon) error 
 	return r.db.Create(userCoupon).Error
 }
 
-func (r *couponRepository) HasUserClaimed(userID, couponID uint) (bool, error) {
+func (r *couponRepository) HasUserClaimed(userID, couponID string) (bool, error) {
 	var count int64
 	err := r.db.Model(&model.UserCoupon{}).
 		Where("user_id = ? AND coupon_id = ?", userID, couponID).

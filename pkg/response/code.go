@@ -8,7 +8,7 @@ const (
 	// 用户模块错误 100xx
 	ErrUserExists    = 10001
 	ErrUserNotFound  = 10002
-	ErrPasswordWrong = 10003
+	ErrAuthFailed    = 10003
 	ErrTokenInvalid  = 10004
 	ErrNoPermission  = 10005
 

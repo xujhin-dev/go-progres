@@ -8,8 +8,8 @@ import (
 )
 
 type CouponTask struct {
-	UserID   uint
-	CouponID uint
+	UserID   string
+	CouponID string
 	Retry    int // 重试次数
 }
 

@@ -9,6 +9,7 @@ import (
 	userRepo "user_crud_jwt/internal/domain/user/repository"
 	"user_crud_jwt/internal/pkg/config"
 	"user_crud_jwt/internal/pkg/middleware"
+	"user_crud_jwt/internal/pkg/otp"
 	"user_crud_jwt/internal/pkg/registry"
 	"user_crud_jwt/pkg/logger"
 
@@ -37,8 +38,9 @@ func (m *PaymentModule) Init(ctx *registry.ModuleContext) error {
 
 	// 支付模块依赖用户服务
 	uRepo := userRepo.NewUserRepository(ctx.DB)
-	uService := userService.NewUserService(uRepo)
-
+	otpService := otp.NewOTPService(ctx.Redis)
+	uService := userService.NewUserService(uRepo, otpService)
+	
 	pService := service.NewPaymentService(pRepo, uService)
 
 	// 2. 注册支付策略

@@ -15,8 +15,8 @@ import (
 
 type CouponService interface {
 	CreateCoupon(name string, total int, amount float64, startTime, endTime time.Time) (*model.Coupon, error)
-	ClaimCoupon(userID, couponID uint) error
-	SendCouponToUser(userID, couponID uint) error
+	ClaimCoupon(userID, couponID string) error
+	SendCouponToUser(userID, couponID string) error
 }
 
 type couponService struct {
@@ -53,7 +53,7 @@ func (s *couponService) CreateCoupon(name string, total int, amount float64, sta
 	}
 
 	// 预热缓存：将库存写入 Redis
-	stockKey := fmt.Sprintf("coupon:stock:%d", coupon.ID)
+	stockKey := fmt.Sprintf("coupon:stock:%s", coupon.ID)
 	s.rdb.Set(context.Background(), stockKey, total, 0)
 
 	return coupon, nil
@@ -84,15 +84,15 @@ var claimScript = redis.NewScript(`
 	return 1 -- 成功
 `)
 
-func (s *couponService) ClaimCoupon(userID, couponID uint) error {
+func (s *couponService) ClaimCoupon(userID, couponID string) error {
 	// 0. 本地缓存校验 (极高性能，无需网络 IO)
 	if _, ok := s.soldOutMap.Load(couponID); ok {
 		return errors.New("coupon out of stock (local cache)")
 	}
 
 	ctx := context.Background()
-	userKey := fmt.Sprintf("coupon:users:%d", couponID)
-	stockKey := fmt.Sprintf("coupon:stock:%d", couponID)
+	userKey := fmt.Sprintf("coupon:users:%s", couponID)
+	stockKey := fmt.Sprintf("coupon:stock:%s", couponID)
 
 	// 1. 执行 Lua 脚本进行预扣减
 	result, err := claimScript.Run(ctx, s.rdb, []string{userKey, stockKey}, userID).Int()

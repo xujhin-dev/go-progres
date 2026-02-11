@@ -82,16 +82,10 @@ func (h *PaymentHandler) WechatNotify(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-func getUserIdFromContext(c *gin.Context) uint {
+func getUserIdFromContext(c *gin.Context) string {
 	val, _ := c.Get("userID")
-	switch v := val.(type) {
-	case uint:
-		return v
-	case float64:
-		return uint(v)
-	case int:
-		return uint(v)
-	default:
-		return 0
+	if str, ok := val.(string); ok {
+		return str
 	}
+	return ""
 }
