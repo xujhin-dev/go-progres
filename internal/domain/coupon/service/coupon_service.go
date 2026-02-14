@@ -120,10 +120,10 @@ func (s *couponService) ClaimCoupon(userID, couponID string) error {
 }
 
 // SendCouponToUser 管理员给用户发券 (复用 ClaimCoupon 逻辑，或实现特定逻辑)
-func (s *couponService) SendCouponToUser(userID, couponID uint) error {
+func (s *couponService) SendCouponToUser(userID, couponID string) error {
 	// 管理员发券本质上也是扣减库存并增加用户券记录
 	// 这里直接复用 ClaimCoupon 逻辑，保证库存一致性
-	// 如果需要绕过“每个用户限领一张”的限制，可以单独写 Lua 脚本或逻辑
+	// 如果需要绕过"每个用户限领一张"的限制，可以单独写 Lua 脚本或逻辑
 	// 假设需求是管理员可以给用户发多张，或者也受限制，这里默认受限制
 	return s.ClaimCoupon(userID, couponID)
 }

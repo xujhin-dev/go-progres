@@ -18,6 +18,13 @@
    - 配置说明
    - 测试指南
 
+3. **[部署指南](DEPLOYMENT_GUIDE.md)** ⭐
+   - 环境要求
+   - 快速部署
+   - CI/CD 自动化
+   - 监控和维护
+   - 故障排除
+
 ### 🏗️ 架构设计
 
 1. **[架构优化详解](ARCHITECTURE_OPTIMIZATION.md)**
