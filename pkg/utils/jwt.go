@@ -15,9 +15,10 @@ type Claims struct {
 }
 
 // GenerateToken 生成JWT Token
-func GenerateToken(userID string, role int) (string, error) {
+func GenerateToken(userID string, role int) (string, *time.Time, error) {
 	now := time.Now()
-	expireTime := now.Add(time.Duration(config.GlobalConfig.JWT.Expire) * time.Hour)
+	// 设置token过期时间为1个月
+	expireTime := now.Add(30 * 24 * time.Hour) // 30天
 
 	claims := Claims{
 		UserID: userID,
@@ -29,7 +30,11 @@ func GenerateToken(userID string, role int) (string, error) {
 	}
 
 	tokenClaims := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return tokenClaims.SignedString([]byte(config.GlobalConfig.JWT.Secret))
+	token, err := tokenClaims.SignedString([]byte(config.GlobalConfig.JWT.Secret))
+	if err != nil {
+		return "", nil, err
+	}
+	return token, &expireTime, nil
 }
 
 // ParseToken 验证JWT Token

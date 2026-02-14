@@ -1,0 +1,28 @@
+server:
+  port: "8080"
+  mode: "debug"
+
+database:
+  host: "localhost"
+  user: "postgres"
+  password: "postgres"
+  dbname: "postgres_prod"
+  port: "5432"
+  sslmode: "disable"
+  timezone: "Asia/Shanghai"
+
+redis:
+  addr: "localhost:6379"
+  password: ""
+  db: 0
+
+jwt:
+  secret: "local-prod-secret-key"
+  expire: 24
+
+# 环境配置
+app:
+  env: "local-prod"
+  debug: true
+  # 本地连接正式环境不支持特殊验证码
+  test_otp_code: ""

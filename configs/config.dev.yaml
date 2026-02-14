@@ -1,0 +1,28 @@
+server:
+  port: "8080"
+  mode: "debug"
+
+database:
+  host: "localhost"
+  user: "postgres"
+  password: "postgres"
+  dbname: "postgres_dev"
+  port: "5432"
+  sslmode: "disable"
+  timezone: "Asia/Shanghai"
+
+redis:
+  addr: "localhost:6379"
+  password: ""
+  db: 0
+
+jwt:
+  secret: "dev-secret-key-change-in-production"
+  expire: 24
+
+# 环境配置
+app:
+  env: "dev"
+  debug: true
+  # 测试环境特殊验证码
+  test_otp_code: "123456"

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"user_crud_jwt/internal/pkg/config"
 )
 
 type OTPService interface {
@@ -51,6 +52,12 @@ func (s *otpService) Send(mobile string) (string, error) {
 // Verify 验证验证码
 // 验证成功后立即删除，防止重放
 func (s *otpService) Verify(mobile, code string) bool {
+	// 检查是否为测试环境且使用特殊验证码
+	if s.isTestEnvironment() && config.GlobalConfig.App.TestOTPCode != "" && code == config.GlobalConfig.App.TestOTPCode {
+		log.Printf("[OTP] Test environment: using special test code for %s", mobile)
+		return true
+	}
+
 	key := fmt.Sprintf("otp:%s", mobile)
 	val, err := s.rdb.Get(context.Background(), key).Result()
 	if err != nil {
@@ -62,4 +69,10 @@ func (s *otpService) Verify(mobile, code string) bool {
 		return true
 	}
 	return false
+}
+
+// isTestEnvironment 检查是否为测试环境
+func (s *otpService) isTestEnvironment() bool {
+	env := config.GlobalConfig.App.Env
+	return env == "test" || env == "dev" || env == "local-test"
 }

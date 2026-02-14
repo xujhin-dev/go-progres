@@ -73,7 +73,19 @@ func (s *userService) LoginOrRegister(mobile, code string) (string, error) {
 	}
 
 	// 5. 生成 Token
-	return utils.GenerateToken(user.ID, user.Role)
+	token, tokenExpireAt, err := utils.GenerateToken(user.ID, user.Role)
+	if err != nil {
+		return "", err
+	}
+
+	// 6. 保存token到用户表
+	user.Token = token
+	user.TokenExpireAt = tokenExpireAt
+	if err := s.repo.Update(user); err != nil {
+		return "", err
+	}
+
+	return token, nil
 }
 
 func (s *userService) SendOTP(mobile string) error {

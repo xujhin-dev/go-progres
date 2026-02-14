@@ -14,6 +14,7 @@ type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	Redis    RedisConfig    `mapstructure:"redis"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
+	App      AppConfig      `mapstructure:"app"`
 	OSS      OSSConfig      `mapstructure:"oss"`
 	Push     PushConfig     `mapstructure:"push"`
 	Alipay   AlipayConfig   `mapstructure:"alipay"`
@@ -44,6 +45,12 @@ type RedisConfig struct {
 type JWTConfig struct {
 	Secret string `mapstructure:"secret"`
 	Expire int64  `mapstructure:"expire"` // 小时
+}
+
+type AppConfig struct {
+	Env         string `mapstructure:"env"`
+	Debug       bool   `mapstructure:"debug"`
+	TestOTPCode string `mapstructure:"test_otp_code"`
 }
 
 type OSSConfig struct {
@@ -105,7 +112,19 @@ func (c *Config) Validate() error {
 
 // LoadConfig 加载配置
 func LoadConfig() {
-	viper.SetConfigName("config")
+	// 获取环境变量，默认为dev
+	env := os.Getenv("APP_ENV")
+	if env == "" {
+		env = "dev"
+	}
+
+	// 根据环境选择配置文件
+	configName := "config"
+	if env != "" && env != "dev" {
+		configName = "config." + env
+	}
+
+	viper.SetConfigName(configName)
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath("./configs")
 	viper.AddConfigPath(".")
@@ -116,6 +135,8 @@ func LoadConfig() {
 	viper.SetDefault("jwt.expire", 24)
 	viper.SetDefault("redis.addr", "localhost:6379")
 	viper.SetDefault("redis.db", 0)
+	viper.SetDefault("app.env", "dev")
+	viper.SetDefault("app.debug", true)
 
 	if err := viper.ReadInConfig(); err != nil {
 		log.Printf("Warning: Config file not found, using defaults or env vars: %v", err)
@@ -144,5 +165,5 @@ func LoadConfig() {
 		log.Fatalf("Configuration validation failed: %v", err)
 	}
 
-	log.Println("Configuration loaded and validated successfully")
+	log.Printf("Configuration loaded and validated successfully. Environment: %s", GlobalConfig.App.Env)
 }

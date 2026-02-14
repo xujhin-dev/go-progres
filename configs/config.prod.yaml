@@ -1,0 +1,28 @@
+server:
+  port: "8080"
+  mode: "release"
+
+database:
+  host: "localhost"
+  user: "postgres"
+  password: "postgres"
+  dbname: "postgres_prod"
+  port: "5432"
+  sslmode: "require"
+  timezone: "Asia/Shanghai"
+
+redis:
+  addr: "localhost:6379"
+  password: ""
+  db: 0
+
+jwt:
+  secret: "change-this-to-a-secure-random-string-at-least-32-characters-long"
+  expire: 24
+
+# 环境配置
+app:
+  env: "prod"
+  debug: false
+  # 生产环境不支持特殊验证码
+  test_otp_code: ""
