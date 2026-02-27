@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,8 +9,8 @@ import (
 	"user_crud_jwt/internal/domain/payment/model"
 	"user_crud_jwt/internal/domain/payment/repository"
 	"user_crud_jwt/internal/domain/payment/strategy"
-	"user_crud_jwt/internal/pkg/push"
 	userService "user_crud_jwt/internal/domain/user/service"
+	"user_crud_jwt/internal/pkg/push"
 
 	"github.com/google/uuid"
 )
@@ -106,7 +107,7 @@ func (s *paymentService) HandleNotify(channel string, params interface{}) error 
 	// 4. 升级会员 (假设购买的是30天会员)
 	// 在实际业务中，应根据 order.Amount 或 order.Subject/ProductID 决定会员时长
 	// 这里简化逻辑：只要支付成功就送30天
-	if err := s.userService.UpgradeMember(order.UserID, 30*24*time.Hour); err != nil {
+	if err := s.userService.UpgradeMember(context.Background(), order.UserID, 30*24*time.Hour); err != nil {
 		// 记录错误，可能需要人工介入或重试
 		fmt.Printf("Failed to upgrade member for user %d: %v\n", order.UserID, err)
 	}

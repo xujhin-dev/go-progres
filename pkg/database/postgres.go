@@ -1,55 +1,46 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
 	"time"
 	"user_crud_jwt/internal/pkg/config"
 
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 )
 
+// DB wraps sqlx.DB for additional functionality
+type DB struct {
+	*sqlx.DB
+}
+
 // InitDatabase 初始化数据库连接
-func InitDatabase() *gorm.DB {
+func InitDatabase() *DB {
 	cfg := config.GlobalConfig.Database
+
+	// Build connection string
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=%s",
 		cfg.Host, cfg.User, cfg.Password, cfg.DBName, cfg.Port, cfg.SSLMode, cfg.TimeZone)
 
-	// 配置 GORM
-	gormConfig := &gorm.Config{
-		Logger:                                   logger.Default.LogMode(logger.Info), // 生产环境可改为 Warn
-		PrepareStmt:                              true,                                // 预编译 SQL 缓存
-		DisableForeignKeyConstraintWhenMigrating: true,                                // 禁用外键约束检查
-	}
-
-	db, err := gorm.Open(postgres.Open(dsn), gormConfig)
+	// Connect using postgres driver
+	db, err := sqlx.Connect("postgres", dsn)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	// 获取底层 SQL DB 对象以配置连接池
-	sqlDB, err := db.DB()
-	if err != nil {
-		log.Fatalf("Failed to get underlying sql.DB: %v", err)
+	// Configure connection pool
+	configureConnectionPool(db.DB)
+
+	// Test connection
+	if err := db.Ping(); err != nil {
+		log.Fatalf("Failed to ping database: %v", err)
 	}
 
-	// 连接池配置
-	configureConnectionPool(sqlDB)
-
-	// 生产环境建议使用 golang-migrate，这里保留 AutoMigrate 仅作演示或开发环境使用
-	// err = db.AutoMigrate(
-	// 	&userModel.User{},
-	// 	&couponModel.Coupon{},
-	// 	&couponModel.UserCoupon{},
-	// )
-	// if err != nil {
-	// 	log.Fatalf("Failed to migrate database: %v", err)
-	// }
-
-	return db
+	log.Println("Database connected successfully")
+	return &DB{DB: db}
 }
 
 // configureConnectionPool 配置数据库连接池
@@ -67,4 +58,71 @@ func configureConnectionPool(sqlDB *sql.DB) {
 	sqlDB.SetConnMaxIdleTime(time.Minute * 30) // 30分钟
 
 	log.Println("Database connection pool configured successfully")
+}
+
+// BeginTx 开始事务
+func (db *DB) BeginTx(ctx context.Context, opts *sql.TxOptions) (*sqlx.Tx, error) {
+	return db.DB.BeginTxx(ctx, opts)
+}
+
+// ExecContext 执行SQL语句
+func (db *DB) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return db.DB.ExecContext(ctx, query, args...)
+}
+
+// QueryContext 查询多行
+func (db *DB) QueryContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {
+	return db.DB.QueryxContext(ctx, query, args...)
+}
+
+// QueryRowContext 查询单行
+func (db *DB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sqlx.Row {
+	return db.DB.QueryRowxContext(ctx, query, args...)
+}
+
+// GetContext 查询单行到结构体
+func (db *DB) GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
+	return db.DB.GetContext(ctx, dest, query, args...)
+}
+
+// SelectContext 查询多行到切片
+func (db *DB) SelectContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
+	return db.DB.SelectContext(ctx, dest, query, args...)
+}
+
+// NamedExec 执行命名参数SQL
+func (db *DB) NamedExec(ctx context.Context, query string, arg interface{}) (sql.Result, error) {
+	return db.DB.NamedExecContext(ctx, query, arg)
+}
+
+// NamedQuery 查询命名参数SQL
+func (db *DB) NamedQuery(ctx context.Context, query string, arg interface{}) (*sqlx.Rows, error) {
+	return db.DB.NamedQueryContext(ctx, query, arg)
+}
+
+// Reconnect 重新连接数据库
+func (db *DB) Reconnect() error {
+	if err := db.DB.Ping(); err != nil {
+		log.Printf("Database connection lost, attempting to reconnect: %v", err)
+
+		// Close existing connection
+		db.DB.Close()
+
+		// Reconnect
+		cfg := config.GlobalConfig.Database
+		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=%s",
+			cfg.Host, cfg.User, cfg.Password, cfg.DBName, cfg.Port, cfg.SSLMode, cfg.TimeZone)
+
+		newDB, err := sqlx.Connect("postgres", dsn)
+		if err != nil {
+			return fmt.Errorf("failed to reconnect to database: %v", err)
+		}
+
+		// Update the underlying DB
+		db.DB = newDB
+		configureConnectionPool(newDB.DB)
+
+		log.Println("Database reconnected successfully")
+	}
+	return nil
 }

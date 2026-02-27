@@ -1,13 +1,14 @@
 package service
 
 import (
+	"context"
+	"fmt"
 	"testing"
 	"time"
 	"user_crud_jwt/internal/domain/user/model"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"gorm.io/gorm"
 )
 
 // MockUserRepository is a mock of UserRepository
@@ -15,52 +16,52 @@ type MockUserRepository struct {
 	mock.Mock
 }
 
-func (m *MockUserRepository) Create(user *model.User) error {
-	args := m.Called(user)
+func (m *MockUserRepository) Create(ctx context.Context, user *model.User) error {
+	args := m.Called(ctx, user)
 	return args.Error(0)
 }
 
-func (m *MockUserRepository) GetByID(id string) (*model.User, error) {
-	args := m.Called(id)
+func (m *MockUserRepository) GetByID(ctx context.Context, id string) (*model.User, error) {
+	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*model.User), args.Error(1)
 }
 
-func (m *MockUserRepository) GetByUsername(username string) (*model.User, error) {
-	args := m.Called(username)
+func (m *MockUserRepository) GetByUsername(ctx context.Context, username string) (*model.User, error) {
+	args := m.Called(ctx, username)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*model.User), args.Error(1)
 }
 
-func (m *MockUserRepository) GetByMobile(mobile string) (*model.User, error) {
-	args := m.Called(mobile)
+func (m *MockUserRepository) GetByMobile(ctx context.Context, mobile string) (*model.User, error) {
+	args := m.Called(ctx, mobile)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*model.User), args.Error(1)
 }
 
-func (m *MockUserRepository) GetList(offset, limit int) ([]model.User, int64, error) {
-	args := m.Called(offset, limit)
+func (m *MockUserRepository) GetList(ctx context.Context, offset, limit int) ([]model.User, int64, error) {
+	args := m.Called(ctx, offset, limit)
 	return args.Get(0).([]model.User), args.Get(1).(int64), args.Error(2)
 }
 
-func (m *MockUserRepository) Update(user *model.User) error {
-	args := m.Called(user)
+func (m *MockUserRepository) Update(ctx context.Context, user *model.User) error {
+	args := m.Called(ctx, user)
 	return args.Error(0)
 }
 
-func (m *MockUserRepository) UpdateMemberStatus(userID string, expireAt time.Time) error {
-	args := m.Called(userID, expireAt)
+func (m *MockUserRepository) UpdateMemberStatus(ctx context.Context, userID string, expireAt time.Time) error {
+	args := m.Called(ctx, userID, expireAt)
 	return args.Error(0)
 }
 
-func (m *MockUserRepository) Delete(user *model.User) error {
-	args := m.Called(user)
+func (m *MockUserRepository) Delete(ctx context.Context, user *model.User) error {
+	args := m.Called(ctx, user)
 	return args.Error(0)
 }
 
@@ -93,17 +94,18 @@ func TestLoginOrRegister(t *testing.T) {
 	mockRepo := new(MockUserRepository)
 	mockOTP := new(MockOTPService)
 	service := NewUserService(mockRepo, mockOTP)
+	ctx := context.Background()
 
 	t.Run("New user registration success", func(t *testing.T) {
 		mobile := "13800138000"
 		code := "123456"
 
 		mockOTP.On("Verify", mobile, code).Return(true)
-		mockRepo.On("GetByMobile", mobile).Return(nil, gorm.ErrRecordNotFound)
-		mockRepo.On("Create", mock.AnythingOfType("*model.User")).Return(nil)
-		mockRepo.On("Update", mock.AnythingOfType("*model.User")).Return(nil)
+		mockRepo.On("GetByMobile", ctx, mobile).Return(nil, fmt.Errorf("user not found"))
+		mockRepo.On("Create", ctx, mock.AnythingOfType("*model.User")).Return(nil)
+		mockRepo.On("Update", ctx, mock.AnythingOfType("*model.User")).Return(nil)
 
-		token, err := service.LoginOrRegister(mobile, code)
+		token, err := service.LoginOrRegister(ctx, mobile, code)
 
 		assert.NoError(t, err)
 		assert.NotEmpty(t, token)
@@ -117,10 +119,10 @@ func TestLoginOrRegister(t *testing.T) {
 		user := createTestUser("existing-user-id", mobile)
 
 		mockOTP.On("Verify", mobile, code).Return(true)
-		mockRepo.On("GetByMobile", mobile).Return(user, nil)
-		mockRepo.On("Update", mock.AnythingOfType("*model.User")).Return(nil)
+		mockRepo.On("GetByMobile", ctx, mobile).Return(user, nil)
+		mockRepo.On("Update", ctx, mock.AnythingOfType("*model.User")).Return(nil)
 
-		token, err := service.LoginOrRegister(mobile, code)
+		token, err := service.LoginOrRegister(ctx, mobile, code)
 
 		assert.NoError(t, err)
 		assert.NotEmpty(t, token)
@@ -134,7 +136,7 @@ func TestLoginOrRegister(t *testing.T) {
 
 		mockOTP.On("Verify", mobile, code).Return(false)
 
-		token, err := service.LoginOrRegister(mobile, code)
+		token, err := service.LoginOrRegister(ctx, mobile, code)
 
 		assert.Error(t, err)
 		assert.Empty(t, token)
@@ -147,6 +149,7 @@ func TestSendOTP(t *testing.T) {
 	mockRepo := new(MockUserRepository)
 	mockOTP := new(MockOTPService)
 	service := NewUserService(mockRepo, mockOTP)
+	ctx := context.Background()
 
 	t.Run("Send OTP success", func(t *testing.T) {
 		mobile := "13800138000"
@@ -154,7 +157,7 @@ func TestSendOTP(t *testing.T) {
 
 		mockOTP.On("Send", mobile).Return(code, nil)
 
-		err := service.SendOTP(mobile)
+		err := service.SendOTP(ctx, mobile)
 
 		assert.NoError(t, err)
 		mockOTP.AssertExpectations(t)
@@ -165,6 +168,7 @@ func TestGetUsers(t *testing.T) {
 	mockRepo := new(MockUserRepository)
 	mockOTP := new(MockOTPService)
 	service := NewUserService(mockRepo, mockOTP)
+	ctx := context.Background()
 
 	t.Run("Get users success", func(t *testing.T) {
 		page, limit := 1, 10
@@ -175,9 +179,9 @@ func TestGetUsers(t *testing.T) {
 		}
 		total := int64(2)
 
-		mockRepo.On("GetList", offset, limit).Return(users, total, nil)
+		mockRepo.On("GetList", ctx, offset, limit).Return(users, total, nil)
 
-		result, totalResult, err := service.GetUsers(page, limit)
+		result, totalResult, err := service.GetUsers(ctx, page, limit)
 
 		assert.NoError(t, err)
 		assert.Len(t, result, 2)
@@ -190,14 +194,15 @@ func TestGetUser(t *testing.T) {
 	mockRepo := new(MockUserRepository)
 	mockOTP := new(MockOTPService)
 	service := NewUserService(mockRepo, mockOTP)
+	ctx := context.Background()
 
 	t.Run("Get user success", func(t *testing.T) {
 		userID := "test-user-id"
 		user := createTestUser(userID, "13800138000")
 
-		mockRepo.On("GetByID", userID).Return(user, nil)
+		mockRepo.On("GetByID", ctx, userID).Return(user, nil)
 
-		result, err := service.GetUser(userID)
+		result, err := service.GetUser(ctx, userID)
 
 		assert.NoError(t, err)
 		assert.Equal(t, userID, result.ID)
@@ -209,16 +214,17 @@ func TestUpdateUser(t *testing.T) {
 	mockRepo := new(MockUserRepository)
 	mockOTP := new(MockOTPService)
 	service := NewUserService(mockRepo, mockOTP)
+	ctx := context.Background()
 
 	t.Run("Update user success", func(t *testing.T) {
 		userID := "test-user-id"
 		user := createTestUser(userID, "13800138000")
 		newNickname := "Updated Nickname"
 
-		mockRepo.On("GetByID", userID).Return(user, nil)
-		mockRepo.On("Update", mock.AnythingOfType("*model.User")).Return(nil)
+		mockRepo.On("GetByID", ctx, userID).Return(user, nil)
+		mockRepo.On("Update", ctx, mock.AnythingOfType("*model.User")).Return(nil)
 
-		result, err := service.UpdateUser(userID, newNickname, "")
+		result, err := service.UpdateUser(ctx, userID, newNickname, "")
 
 		assert.NoError(t, err)
 		assert.Equal(t, newNickname, result.Nickname)
@@ -230,15 +236,16 @@ func TestDeleteUser(t *testing.T) {
 	mockRepo := new(MockUserRepository)
 	mockOTP := new(MockOTPService)
 	service := NewUserService(mockRepo, mockOTP)
+	ctx := context.Background()
 
 	t.Run("Delete user success", func(t *testing.T) {
 		userID := "test-user-id"
 		user := createTestUser(userID, "13800138000")
 
-		mockRepo.On("GetByID", userID).Return(user, nil)
-		mockRepo.On("Update", mock.AnythingOfType("*model.User")).Return(nil)
+		mockRepo.On("GetByID", ctx, userID).Return(user, nil)
+		mockRepo.On("Update", ctx, mock.AnythingOfType("*model.User")).Return(nil)
 
-		err := service.DeleteUser(userID)
+		err := service.DeleteUser(ctx, userID)
 
 		assert.NoError(t, err)
 		mockRepo.AssertExpectations(t)

@@ -25,8 +25,8 @@ type DatabaseConfig struct {
 
 // ReadWriteSplit 读写分离
 type ReadWriteSplit struct {
-	masterDB     *gorm.DB
-	slaveDBs     []*gorm.DB
+	masterDB     *DB
+	slaveDBs     []*DB
 	currentSlave int
 	mu           sync.RWMutex
 	healthCheck  *HealthChecker

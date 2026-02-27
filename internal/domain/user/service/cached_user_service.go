@@ -10,8 +10,6 @@ import (
 	"user_crud_jwt/internal/pkg/otp"
 	"user_crud_jwt/pkg/cache"
 	"user_crud_jwt/pkg/utils"
-
-	"gorm.io/gorm"
 )
 
 // CachedUserService 带缓存的用户服务
@@ -30,102 +28,78 @@ func NewCachedUserService(repo repository.UserRepository, otp otp.OTPService, ca
 	}
 }
 
-// 缓存键常量
-const (
-	UserCacheKeyPrefix     = "user:"
-	UserListCacheKeyPrefix = "user_list:"
-	UserCacheTTL           = time.Hour * 2
-	UserListCacheTTL       = time.Minute * 30
-)
-
-// getUserCacheKey 获取用户缓存键
-func (s *CachedUserService) getUserCacheKey(id string) string {
-	return fmt.Sprintf("%s%s", UserCacheKeyPrefix, id)
-}
-
-// getUserListCacheKey 获取用户列表缓存键
-func (s *CachedUserService) getUserListCacheKey(page, limit int) string {
-	return fmt.Sprintf("%s%d:%d", UserListCacheKeyPrefix, page, limit)
-}
-
-// invalidateUserCache 清除用户相关缓存
-func (s *CachedUserService) invalidateUserCache(ctx context.Context, userID string) error {
-	// 清除用户缓存
-	if err := s.cache.Delete(ctx, s.getUserCacheKey(userID)); err != nil {
-		return fmt.Errorf("failed to invalidate user cache: %w", err)
-	}
-
-	// 清除用户列表缓存（所有页）
-	pattern := UserListCacheKeyPrefix + "*"
-	if err := s.cache.InvalidatePattern(ctx, pattern); err != nil {
-		return fmt.Errorf("failed to invalidate user list cache: %w", err)
-	}
-
-	return nil
-}
-
-// LoginOrRegister 登录或注册
-func (s *CachedUserService) LoginOrRegister(mobile, code string) (string, error) {
+// LoginOrRegister 登录或注册（带缓存）
+func (s *CachedUserService) LoginOrRegister(ctx context.Context, mobile, code string) (string, error) {
 	// 1. 验证验证码
 	if !s.otp.Verify(mobile, code) {
 		return "", errors.New("invalid verification code")
 	}
 
-	// 2. 查询用户是否存在
-	user, err := s.repo.GetByMobile(mobile)
+	// 2. 查询用户是否存在（先查缓存）
+	cacheKey := fmt.Sprintf("user:mobile:%s", mobile)
+	user, err := s.getUserFromCache(ctx, cacheKey)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// 3. 不存在则注册
-			user = &model.User{
-				Mobile:   mobile,
-				Nickname: "User_" + mobile[len(mobile)-4:], // 默认昵称
-				Role:     model.RoleUser,
-			}
-			if err := s.repo.Create(user); err != nil {
+		// 缓存未命中，从数据库查询
+		user, err = s.repo.GetByMobile(ctx, mobile)
+		if err != nil {
+			if err.Error() == "user not found" {
+				// 3. 不存在则注册
+				user = model.NewUser(mobile, "User_"+mobile[len(mobile)-4:])
+
+				if err := s.repo.Create(ctx, user); err != nil {
+					return "", err
+				}
+			} else {
 				return "", err
 			}
-		} else {
-			return "", err
 		}
+
+		// 缓存用户信息
+		s.setUserCache(ctx, cacheKey, user, 5*time.Minute)
 	}
 
 	// 4. 检查用户状态
 	if user.Status == model.StatusBanned {
-		if user.BannedUntil != nil && time.Now().After(*user.BannedUntil) {
-			user.Status = model.StatusNormal
-			user.BannedUntil = nil
-			s.repo.Update(user)
-		} else {
+		if user.BannedUntil != nil && user.BannedUntil.After(time.Now()) {
 			return "", errors.New("account is banned")
 		}
+		// 封禁时间已过，解除封禁
+		user.Status = model.StatusNormal
+		user.BannedUntil = nil
 	}
+
 	if user.Status == model.StatusDeleted {
 		return "", errors.New("account has been deleted")
 	}
 
-	// 5. 生成 Token
+	// 5. 生成JWT token
 	token, tokenExpireAt, err := utils.GenerateToken(user.ID, user.Role)
 	if err != nil {
 		return "", err
 	}
 
-	// 6. 保存token到用户表
+	// 6. 保存token到用户记录
 	user.Token = token
 	user.TokenExpireAt = tokenExpireAt
-	if err := s.repo.Update(user); err != nil {
+	if err := s.repo.Update(ctx, user); err != nil {
 		return "", err
 	}
+
+	// 7. 更新缓存
+	s.setUserCache(ctx, cacheKey, user, 5*time.Minute)
+	s.setUserCache(ctx, fmt.Sprintf("user:id:%s", user.ID), user, 10*time.Minute)
 
 	return token, nil
 }
 
-func (s *CachedUserService) SendOTP(mobile string) error {
+// SendOTP 发送验证码
+func (s *CachedUserService) SendOTP(ctx context.Context, mobile string) error {
 	_, err := s.otp.Send(mobile)
 	return err
 }
 
 // GetUsers 获取用户列表（带缓存）
-func (s *CachedUserService) GetUsers(page, limit int) ([]model.User, int64, error) {
+func (s *CachedUserService) GetUsers(ctx context.Context, page, limit int) ([]model.User, int64, error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -133,173 +107,152 @@ func (s *CachedUserService) GetUsers(page, limit int) ([]model.User, int64, erro
 		limit = 10
 	}
 
-	ctx := context.Background()
-	cacheKey := s.getUserListCacheKey(page, limit)
+	cacheKey := fmt.Sprintf("users:list:page:%d:limit:%d", page, limit)
 
 	// 尝试从缓存获取
-	var cachedResult struct {
-		Users []model.User `json:"users"`
-		Total int64        `json:"total"`
+	var cachedUsers []model.User
+	if err := s.cache.Get(ctx, cacheKey, &cachedUsers); err == nil {
+		// 从缓存获取总数
+		var total int64
+		totalKey := fmt.Sprintf("users:total")
+		if err := s.cache.Get(ctx, totalKey, &total); err == nil {
+			return cachedUsers, total, nil
+		}
 	}
 
-	if err := s.cache.Get(ctx, cacheKey, &cachedResult); err == nil {
-		return cachedResult.Users, cachedResult.Total, nil
-	}
-
-	// 缓存未命中，从数据库获取
 	offset := (page - 1) * limit
-	users, total, err := s.repo.GetList(offset, limit)
+	users, total, err := s.repo.GetList(ctx, offset, limit)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	// 缓存结果
-	cachedResult.Users = users
-	cachedResult.Total = total
-	if err := s.cache.Set(ctx, cacheKey, cachedResult, UserListCacheTTL); err != nil {
-		// 缓存失败不影响业务逻辑，只记录日志
-		fmt.Printf("Warning: failed to cache user list: %v\n", err)
-	}
+	s.cache.Set(ctx, cacheKey, users, 2*time.Minute)
+	s.cache.Set(ctx, "users:total", total, 5*time.Minute)
 
 	return users, total, nil
 }
 
-// GetUser 获取单个用户（带缓存）
-func (s *CachedUserService) GetUser(id string) (*model.User, error) {
-	ctx := context.Background()
-	cacheKey := s.getUserCacheKey(id)
+// GetUser 获取用户信息（带缓存）
+func (s *CachedUserService) GetUser(ctx context.Context, id string) (*model.User, error) {
+	cacheKey := fmt.Sprintf("user:id:%s", id)
 
-	// 尝试从缓存获取
+	// 先从缓存获取
 	var user model.User
 	if err := s.cache.Get(ctx, cacheKey, &user); err == nil {
 		return &user, nil
 	}
 
-	// 缓存未命中，从数据库获取
-	userData, err := s.repo.GetByID(id)
+	// 缓存未命中，从数据库查询
+	dbUser, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	// 缓存结果
-	if err := s.cache.Set(ctx, cacheKey, userData, UserCacheTTL); err != nil {
-		fmt.Printf("Warning: failed to cache user: %v\n", err)
-	}
+	// 缓存用户信息
+	s.setUserCache(ctx, cacheKey, dbUser, 10*time.Minute)
 
-	return userData, nil
+	return dbUser, nil
 }
 
-// UpdateUser 更新用户（带缓存失效）
-func (s *CachedUserService) UpdateUser(id string, nickname, avatarURL string) (*model.User, error) {
-	user, err := s.repo.GetByID(id)
+// UpdateUser 更新用户信息（带缓存）
+func (s *CachedUserService) UpdateUser(ctx context.Context, id string, nickname, avatarURL string) (*model.User, error) {
+	user, err := s.GetUser(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	user.Nickname = nickname
-	user.AvatarURL = avatarURL
+	if nickname != "" {
+		user.Nickname = nickname
+	}
+	if avatarURL != "" {
+		user.AvatarURL = avatarURL
+	}
 
-	if err := s.repo.Update(user); err != nil {
+	if err := s.repo.Update(ctx, user); err != nil {
 		return nil, err
 	}
 
 	// 清除相关缓存
-	ctx := context.Background()
-	if err := s.invalidateUserCache(ctx, id); err != nil {
-		fmt.Printf("Warning: failed to invalidate cache after user update: %v\n", err)
-	}
+	s.clearUserCache(ctx, id)
+	s.clearUserCache(ctx, fmt.Sprintf("user:mobile:%s", user.Mobile))
 
 	return user, nil
 }
 
-func (s *CachedUserService) UpgradeMember(userID string, duration time.Duration) error {
-	expireAt := time.Now().Add(duration)
-	if err := s.repo.UpdateMemberStatus(userID, expireAt); err != nil {
-		return err
-	}
-
-	// 清除相关缓存
-	ctx := context.Background()
-	if err := s.invalidateUserCache(ctx, userID); err != nil {
-		fmt.Printf("Warning: failed to invalidate cache after member upgrade: %v\n", err)
-	}
-
-	return nil
-}
-
-// DeleteUser 删除用户（带缓存失效）
-func (s *CachedUserService) DeleteUser(id string) error {
-	user, err := s.repo.GetByID(id)
+// UpgradeMember 升级会员（带缓存）
+func (s *CachedUserService) UpgradeMember(ctx context.Context, userID string, duration time.Duration) error {
+	user, err := s.GetUser(ctx, userID)
 	if err != nil {
 		return err
 	}
 
-	// 标记为已注销状态，而不是真正删除
-	user.Status = model.StatusDeleted
-	if err := s.repo.Update(user); err != nil {
+	var expireAt time.Time
+	if user.MemberExpireAt != nil && user.MemberExpireAt.After(time.Now()) {
+		// 如果已经是会员，在原有时间基础上延长
+		expireAt = user.MemberExpireAt.Add(duration)
+	} else {
+		// 如果不是会员，从现在开始计算
+		expireAt = time.Now().Add(duration)
+	}
+
+	err = s.repo.UpdateMemberStatus(ctx, userID, expireAt)
+	if err != nil {
 		return err
 	}
 
-	// 清除相关缓存
-	ctx := context.Background()
-	if err := s.invalidateUserCache(ctx, id); err != nil {
-		fmt.Printf("Warning: failed to invalidate cache after user deletion: %v\n", err)
-	}
+	// 清除用户缓存
+	s.clearUserCache(ctx, userID)
 
 	return nil
 }
 
-// WarmupCache 预热缓存
-func (s *CachedUserService) WarmupCache(ctx context.Context) error {
-	// 预热热门用户数据
-	popularUsers := []string{"1", "2", "3"} // 可以从配置或统计中获取
-
-	for _, userID := range popularUsers {
-		user, err := s.repo.GetByID(userID)
-		if err != nil {
-			continue // 跳过不存在的用户
-		}
-
-		cacheKey := s.getUserCacheKey(userID)
-		if err := s.cache.Set(ctx, cacheKey, user, UserCacheTTL); err != nil {
-			fmt.Printf("Warning: failed to warmup cache for user %s: %v\n", userID, err)
-		}
+// DeleteUser 删除用户（带缓存）
+func (s *CachedUserService) DeleteUser(ctx context.Context, id string) error {
+	user, err := s.GetUser(ctx, id)
+	if err != nil {
+		return err
 	}
 
-	// 预热第一页用户列表
-	users, total, err := s.repo.GetList(0, 10)
-	if err == nil {
-		cacheKey := s.getUserListCacheKey(1, 10)
-		result := struct {
-			Users []model.User `json:"users"`
-			Total int64        `json:"total"`
-		}{
-			Users: users,
-			Total: total,
-		}
-		s.cache.Set(ctx, cacheKey, result, UserListCacheTTL)
+	user.Status = model.StatusDeleted
+	err = s.repo.Update(ctx, user)
+	if err != nil {
+		return err
 	}
+
+	// 清除所有相关缓存
+	s.clearUserCache(ctx, id)
+	s.clearUserCache(ctx, fmt.Sprintf("user:mobile:%s", user.Mobile))
 
 	return nil
 }
 
-// GetCacheStats 获取缓存统计信息
-func (s *CachedUserService) GetCacheStats(ctx context.Context) map[string]interface{} {
-	stats := make(map[string]interface{})
-
-	// 检查特定用户缓存
-	testKeys := []string{"user:1", "user:2", "user_list:1:10"}
-	existingKeys := 0
-
-	for _, key := range testKeys {
-		if exists, _ := s.cache.Exists(ctx, key); exists {
-			existingKeys++
-		}
+// getUserFromCache 从缓存获取用户信息
+func (s *CachedUserService) getUserFromCache(ctx context.Context, key string) (*model.User, error) {
+	var user model.User
+	if err := s.cache.Get(ctx, key, &user); err != nil {
+		return nil, err
 	}
 
-	stats["checked_keys"] = len(testKeys)
-	stats["existing_keys"] = existingKeys
-	stats["hit_rate"] = float64(existingKeys) / float64(len(testKeys))
+	return &user, nil
+}
 
-	return stats
+// setUserCache 设置用户缓存
+func (s *CachedUserService) setUserCache(ctx context.Context, key string, user *model.User, ttl time.Duration) {
+	s.cache.Set(ctx, key, user, ttl)
+}
+
+// clearUserCache 清除用户相关缓存
+func (s *CachedUserService) clearUserCache(ctx context.Context, id string) {
+	keys := []string{
+		fmt.Sprintf("user:id:%s", id),
+	}
+
+	// 清除用户信息缓存
+	for _, key := range keys {
+		s.cache.Delete(ctx, key)
+	}
+
+	// 清除用户列表缓存
+	s.cache.Delete(ctx, "users:total")
 }

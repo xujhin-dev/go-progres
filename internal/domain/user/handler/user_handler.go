@@ -46,7 +46,7 @@ func (h *UserHandler) LoginOrRegister(c *gin.Context) {
 		return
 	}
 
-	token, err := h.service.LoginOrRegister(input.Mobile, input.Code)
+	token, err := h.service.LoginOrRegister(c.Request.Context(), input.Mobile, input.Code)
 	if err != nil {
 		response.Error(c, http.StatusUnauthorized, response.ErrAuthFailed, err.Error())
 		return
@@ -69,7 +69,7 @@ func (h *UserHandler) SendOTP(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.SendOTP(input.Mobile); err != nil {
+	if err := h.service.SendOTP(c.Request.Context(), input.Mobile); err != nil {
 		response.Error(c, http.StatusInternalServerError, response.ErrServerInternal, err.Error())
 		return
 	}
@@ -93,7 +93,7 @@ func (h *UserHandler) GetUsers(c *gin.Context) {
 		return
 	}
 
-	users, total, err := h.service.GetUsers(pagination.Page, pagination.Limit)
+	users, total, err := h.service.GetUsers(c.Request.Context(), pagination.Page, pagination.Limit)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, response.ErrServerInternal, "Failed to fetch users")
 		return
@@ -111,7 +111,7 @@ func (h *UserHandler) GetUsers(c *gin.Context) {
 // GetUser 获取单个用户
 func (h *UserHandler) GetUser(c *gin.Context) {
 	id := c.Param("id")
-	user, err := h.service.GetUser(id)
+	user, err := h.service.GetUser(c.Request.Context(), id)
 	if err != nil {
 		response.Error(c, http.StatusNotFound, response.ErrUserNotFound, "User not found")
 		return
@@ -154,7 +154,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	user, err := h.service.UpdateUser(id, input.Nickname, input.AvatarURL)
+	user, err := h.service.UpdateUser(c.Request.Context(), id, input.Nickname, input.AvatarURL)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, response.ErrServerInternal, "Failed to update user")
 		return
@@ -183,7 +183,7 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.DeleteUser(id); err != nil {
+	if err := h.service.DeleteUser(c.Request.Context(), id); err != nil {
 		response.Error(c, http.StatusInternalServerError, response.ErrServerInternal, err.Error())
 		return
 	}
@@ -197,5 +197,3 @@ func getUserIdFromContext(c *gin.Context) string {
 	}
 	return ""
 }
-
-

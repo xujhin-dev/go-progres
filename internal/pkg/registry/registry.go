@@ -1,14 +1,15 @@
 package registry
 
 import (
+	"user_crud_jwt/pkg/database"
+
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 	"github.com/redis/go-redis/v9"
 )
 
 // ModuleContext 模块初始化所需的上下文
 type ModuleContext struct {
-	DB     *gorm.DB
+	DB     *database.DB
 	Redis  *redis.Client
 	Router *gin.Engine
 }
