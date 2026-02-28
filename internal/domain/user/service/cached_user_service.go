@@ -121,7 +121,12 @@ func (s *CachedUserService) GetUsers(ctx context.Context, page, limit int) ([]mo
 	}
 
 	offset := (page - 1) * limit
-	users, total, err := s.repo.GetList(ctx, offset, limit)
+	users, err := s.repo.GetList(ctx, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	total, err := s.repo.Count(ctx)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -130,7 +135,13 @@ func (s *CachedUserService) GetUsers(ctx context.Context, page, limit int) ([]mo
 	s.cache.Set(ctx, cacheKey, users, 2*time.Minute)
 	s.cache.Set(ctx, "users:total", total, 5*time.Minute)
 
-	return users, total, nil
+	// 转换指针切片为值切片
+	result := make([]model.User, len(users))
+	for i, user := range users {
+		result[i] = *user
+	}
+
+	return result, total, nil
 }
 
 // GetUser 获取用户信息（带缓存）
@@ -182,21 +193,7 @@ func (s *CachedUserService) UpdateUser(ctx context.Context, id string, nickname,
 
 // UpgradeMember 升级会员（带缓存）
 func (s *CachedUserService) UpgradeMember(ctx context.Context, userID string, duration time.Duration) error {
-	user, err := s.GetUser(ctx, userID)
-	if err != nil {
-		return err
-	}
-
-	var expireAt time.Time
-	if user.MemberExpireAt != nil && user.MemberExpireAt.After(time.Now()) {
-		// 如果已经是会员，在原有时间基础上延长
-		expireAt = user.MemberExpireAt.Add(duration)
-	} else {
-		// 如果不是会员，从现在开始计算
-		expireAt = time.Now().Add(duration)
-	}
-
-	err = s.repo.UpdateMemberStatus(ctx, userID, expireAt)
+	err := s.repo.UpdateMemberStatus(ctx, userID, 1) // 1 表示会员状态
 	if err != nil {
 		return err
 	}

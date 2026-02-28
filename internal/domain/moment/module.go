@@ -26,8 +26,8 @@ func (m *MomentModule) Priority() int {
 }
 
 func (m *MomentModule) Init(ctx *registry.ModuleContext) error {
-	// 1. 依赖注入 - 使用 SQLX 仓库
-	mRepo := repository.NewMomentRepository(ctx.DB)
+	// 1. 依赖注入 - 使用简化仓库
+	mRepo := repository.NewSimpleMomentRepository(ctx.DB)
 	momentService := service.NewMomentService(mRepo)
 	momentHandler := handler.NewMomentHandler(momentService)
 

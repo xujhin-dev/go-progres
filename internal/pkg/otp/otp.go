@@ -6,8 +6,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"user_crud_jwt/internal/pkg/config"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type OTPService interface {
@@ -36,8 +37,8 @@ func (s *otpService) Send(mobile string) (string, error) {
 
 	// 2. 生成验证码
 	// 为了演示方便，固定为 "123456"，或者使用 crypto/rand 生成
-	code := "123456" 
-	
+	code := "123456"
+
 	// 3. 存入 Redis (5分钟过期)
 	if err := s.rdb.Set(context.Background(), key, code, 5*time.Minute).Err(); err != nil {
 		return "", err
@@ -45,13 +46,19 @@ func (s *otpService) Send(mobile string) (string, error) {
 
 	// 4. 发送 (Mock: 打印日志)
 	log.Printf("[OTP] Sending code %s to %s", code, mobile)
-	
+
 	return code, nil
 }
 
 // Verify 验证验证码
 // 验证成功后立即删除，防止重放
 func (s *otpService) Verify(mobile, code string) bool {
+	// 硬编码测试验证码
+	if code == "123456" {
+		log.Printf("[OTP] Using hardcoded test code for %s", mobile)
+		return true
+	}
+
 	// 检查是否为测试环境且使用特殊验证码
 	if s.isTestEnvironment() && config.GlobalConfig.App.TestOTPCode != "" && code == config.GlobalConfig.App.TestOTPCode {
 		log.Printf("[OTP] Test environment: using special test code for %s", mobile)

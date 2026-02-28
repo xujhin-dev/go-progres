@@ -26,8 +26,8 @@ func (m *CouponModule) Priority() int {
 }
 
 func (m *CouponModule) Init(ctx *registry.ModuleContext) error {
-	// 1. 依赖注入 - 使用 SQLX 仓库
-	cRepo := repository.NewCouponRepository(ctx.DB)
+	// 1. 依赖注入 - 使用简单仓库
+	cRepo := repository.NewSimpleCouponRepository(ctx.DB)
 	couponService := service.NewCouponService(cRepo, ctx.Redis)
 	couponHandler := handler.NewCouponHandler(couponService)
 

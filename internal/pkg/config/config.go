@@ -10,14 +10,14 @@ import (
 
 // Config 全局配置结构体
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Redis    RedisConfig    `mapstructure:"redis"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
-	App      AppConfig      `mapstructure:"app"`
-	OSS      OSSConfig      `mapstructure:"oss"`
-	Push     PushConfig     `mapstructure:"push"`
-	Alipay   AlipayConfig   `mapstructure:"alipay"`
+	Server   ServerConfig    `mapstructure:"server"`
+	Database DatabaseConfig  `mapstructure:"database"`
+	Redis    RedisConfig     `mapstructure:"redis"`
+	JWT      JWTConfig       `mapstructure:"jwt"`
+	App      AppConfig       `mapstructure:"app"`
+	OSS      OSSConfig       `mapstructure:"oss"`
+	Push     PushConfig      `mapstructure:"push"`
+	Alipay   AlipayConfig    `mapstructure:"alipay"`
 	Wechat   WechatPayConfig `mapstructure:"wechat"`
 }
 
@@ -77,12 +77,12 @@ type AlipayConfig struct {
 }
 
 type WechatPayConfig struct {
-	AppID           string `mapstructure:"app_id"`
-	MchID           string `mapstructure:"mch_id"`
+	AppID                string `mapstructure:"app_id"`
+	MchID                string `mapstructure:"mch_id"`
 	MchCertificateSerial string `mapstructure:"mch_cert_serial"`
-	MchPrivateKey   string `mapstructure:"mch_private_key"`
-	APIv3Key        string `mapstructure:"apiv3_key"`
-	NotifyURL       string `mapstructure:"notify_url"`
+	MchPrivateKey        string `mapstructure:"mch_private_key"`
+	APIv3Key             string `mapstructure:"apiv3_key"`
+	NotifyURL            string `mapstructure:"notify_url"`
 }
 
 var GlobalConfig Config
@@ -137,6 +137,7 @@ func LoadConfig() {
 	viper.SetDefault("redis.db", 0)
 	viper.SetDefault("app.env", "dev")
 	viper.SetDefault("app.debug", true)
+	viper.SetDefault("app.test_otp_code", "123456")
 
 	if err := viper.ReadInConfig(); err != nil {
 		log.Printf("Warning: Config file not found, using defaults or env vars: %v", err)

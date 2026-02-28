@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 	"user_crud_jwt/internal/domain/user/service"
 	"user_crud_jwt/pkg/response"
@@ -40,17 +41,25 @@ type UpdateUserInput struct {
 // @Success 200 {object} response.Response{data=string} "Token"
 // @Router /auth/login [post]
 func (h *UserHandler) LoginOrRegister(c *gin.Context) {
+	log.Printf("[LoginHandler] Starting login process")
+
 	var input LoginInput
 	if err := c.ShouldBindJSON(&input); err != nil {
+		log.Printf("[LoginHandler] JSON binding error: %v", err)
 		response.Error(c, http.StatusBadRequest, response.ErrInvalidParam, err.Error())
 		return
 	}
 
+	log.Printf("[LoginHandler] Login attempt - Mobile: %s, Code: %s", input.Mobile, input.Code)
+
 	token, err := h.service.LoginOrRegister(c.Request.Context(), input.Mobile, input.Code)
 	if err != nil {
+		log.Printf("[LoginHandler] Login failed: %v", err)
 		response.Error(c, http.StatusUnauthorized, response.ErrAuthFailed, err.Error())
 		return
 	}
+
+	log.Printf("[LoginHandler] Login successful for mobile: %s", input.Mobile)
 	response.Success(c, token)
 }
 

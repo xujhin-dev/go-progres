@@ -195,10 +195,9 @@ func TestUserRepository_GetList(t *testing.T) {
 		WillReturnRows(rows)
 
 	// 执行测试
-	users, total, err := userRepo.GetList(ctx, offset, limit)
+	users, err := userRepo.GetList(ctx, limit, offset)
 	assert.NoError(t, err)
 	assert.Len(t, users, 2)
-	assert.Equal(t, int64(2), total)
 
 	// 验证所有期望都被满足
 	assert.NoError(t, mock.ExpectationsWereMet())
@@ -215,15 +214,15 @@ func TestUserRepository_UpdateMemberStatus(t *testing.T) {
 
 	ctx := context.Background()
 	userID := "test-user-id"
-	expireAt := time.Now().Add(30 * 24 * time.Hour)
+	status := 1 // 会员状态
 
 	// 设置期望的 SQL 查询
-	mock.ExpectExec(`UPDATE users SET is_member = true, member_expire_at = \$1, updated_at = \$2 WHERE id = \$3 AND deleted_at IS NULL`).
-		WithArgs(expireAt, sqlmock.AnyArg(), userID).
+	mock.ExpectExec(`UPDATE users SET updated_at = \$1, username = \$2, password = \$3, email = \$4, mobile = \$5, nickname = \$6, avatar_url = \$7, role = \$8, is_member = \$9, member_expire_at = \$10, status = \$11, banned_until = \$12, token = \$13, token_expire_at = \$14 WHERE id = \$15 AND deleted_at IS NULL`).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), status, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), userID).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	// 执行测试
-	err = userRepo.UpdateMemberStatus(ctx, userID, expireAt)
+	err = userRepo.UpdateMemberStatus(ctx, userID, status)
 	assert.NoError(t, err)
 
 	// 验证所有期望都被满足

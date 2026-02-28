@@ -39,12 +39,13 @@ func (q *Queries) CountPosts(ctx context.Context, status pgtype.Text) (int64, er
 
 const createComment = `-- name: CreateComment :one
 INSERT INTO comments (
-    id, created_at, updated_at, user_id, post_id, content
+    id, created_at, updated_at, user_id, post_id, content, parent_id, root_id, level
 ) VALUES (
     $1, $2, $3, 
-    $4, $5, $6
+    $4, $5, $6, 
+    $7, $8, $9
 )
-RETURNING id, created_at, updated_at, deleted_at, user_id, post_id, content
+RETURNING id, created_at, updated_at, deleted_at, user_id, post_id, content, parent_id, root_id, level
 `
 
 type CreateCommentParams struct {
@@ -54,6 +55,9 @@ type CreateCommentParams struct {
 	UserID    pgtype.UUID        `json:"user_id"`
 	PostID    pgtype.UUID        `json:"post_id"`
 	Content   pgtype.Text        `json:"content"`
+	ParentID  pgtype.UUID        `json:"parent_id"`
+	RootID    pgtype.UUID        `json:"root_id"`
+	Level     pgtype.Int4        `json:"level"`
 }
 
 type CreateCommentRow struct {
@@ -64,6 +68,9 @@ type CreateCommentRow struct {
 	UserID    pgtype.UUID        `json:"user_id"`
 	PostID    pgtype.UUID        `json:"post_id"`
 	Content   pgtype.Text        `json:"content"`
+	ParentID  pgtype.UUID        `json:"parent_id"`
+	RootID    pgtype.UUID        `json:"root_id"`
+	Level     pgtype.Int4        `json:"level"`
 }
 
 func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (CreateCommentRow, error) {
@@ -74,6 +81,9 @@ func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (C
 		arg.UserID,
 		arg.PostID,
 		arg.Content,
+		arg.ParentID,
+		arg.RootID,
+		arg.Level,
 	)
 	var i CreateCommentRow
 	err := row.Scan(
@@ -84,6 +94,9 @@ func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (C
 		&i.UserID,
 		&i.PostID,
 		&i.Content,
+		&i.ParentID,
+		&i.RootID,
+		&i.Level,
 	)
 	return i, err
 }
@@ -131,12 +144,13 @@ func (q *Queries) CreateLike(ctx context.Context, arg CreateLikeParams) (Like, e
 
 const createPost = `-- name: CreatePost :one
 INSERT INTO posts (
-    id, created_at, updated_at, user_id, content, status
+    id, created_at, updated_at, user_id, content, media_urls, type, status
 ) VALUES (
     $1, $2, $3, 
-    $4, $5, $6
+    $4, $5, $6, 
+    $7, $8
 )
-RETURNING id, created_at, updated_at, deleted_at, user_id, content, status
+RETURNING id, created_at, updated_at, deleted_at, user_id, content, media_urls, type, status
 `
 
 type CreatePostParams struct {
@@ -145,29 +159,23 @@ type CreatePostParams struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	UserID    pgtype.UUID        `json:"user_id"`
 	Content   pgtype.Text        `json:"content"`
+	MediaUrls []byte             `json:"media_urls"`
+	Type      pgtype.Text        `json:"type"`
 	Status    pgtype.Text        `json:"status"`
 }
 
-type CreatePostRow struct {
-	ID        pgtype.UUID        `json:"id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
-	UserID    pgtype.UUID        `json:"user_id"`
-	Content   pgtype.Text        `json:"content"`
-	Status    pgtype.Text        `json:"status"`
-}
-
-func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (CreatePostRow, error) {
+func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, error) {
 	row := q.db.QueryRow(ctx, createPost,
 		arg.ID,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 		arg.UserID,
 		arg.Content,
+		arg.MediaUrls,
+		arg.Type,
 		arg.Status,
 	)
-	var i CreatePostRow
+	var i Post
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
@@ -175,7 +183,58 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (CreateP
 		&i.DeletedAt,
 		&i.UserID,
 		&i.Content,
+		&i.MediaUrls,
+		&i.Type,
 		&i.Status,
+	)
+	return i, err
+}
+
+const createPostTopic = `-- name: CreatePostTopic :exec
+INSERT INTO post_topics (post_id, topic_id) VALUES ($1, $2)
+`
+
+type CreatePostTopicParams struct {
+	PostID  pgtype.UUID `json:"post_id"`
+	TopicID pgtype.UUID `json:"topic_id"`
+}
+
+func (q *Queries) CreatePostTopic(ctx context.Context, arg CreatePostTopicParams) error {
+	_, err := q.db.Exec(ctx, createPostTopic, arg.PostID, arg.TopicID)
+	return err
+}
+
+const createTopic = `-- name: CreateTopic :one
+INSERT INTO topics (
+    id, created_at, updated_at, name
+) VALUES (
+    $1, $2, $3, 
+    $4
+)
+RETURNING id, created_at, updated_at, deleted_at, name
+`
+
+type CreateTopicParams struct {
+	ID        pgtype.UUID        `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	Name      pgtype.Text        `json:"name"`
+}
+
+func (q *Queries) CreateTopic(ctx context.Context, arg CreateTopicParams) (Topic, error) {
+	row := q.db.QueryRow(ctx, createTopic,
+		arg.ID,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+		arg.Name,
+	)
+	var i Topic
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.Name,
 	)
 	return i, err
 }
@@ -205,8 +264,55 @@ func (q *Queries) DeleteLike(ctx context.Context, arg DeleteLikeParams) error {
 	return err
 }
 
+const deletePostTopic = `-- name: DeletePostTopic :exec
+DELETE FROM post_topics WHERE post_id = $1 AND topic_id = $2
+`
+
+type DeletePostTopicParams struct {
+	PostID  pgtype.UUID `json:"post_id"`
+	TopicID pgtype.UUID `json:"topic_id"`
+}
+
+func (q *Queries) DeletePostTopic(ctx context.Context, arg DeletePostTopicParams) error {
+	_, err := q.db.Exec(ctx, deletePostTopic, arg.PostID, arg.TopicID)
+	return err
+}
+
+const getAllTopics = `-- name: GetAllTopics :many
+SELECT id, created_at, updated_at, deleted_at, name
+FROM topics 
+WHERE deleted_at IS NULL
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetAllTopics(ctx context.Context) ([]Topic, error) {
+	rows, err := q.db.Query(ctx, getAllTopics)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Topic{}
+	for rows.Next() {
+		var i Topic
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.Name,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCommentByID = `-- name: GetCommentByID :one
-SELECT id, created_at, updated_at, deleted_at, user_id, post_id, content
+SELECT id, created_at, updated_at, deleted_at, user_id, post_id, content, parent_id, root_id, level
 FROM comments 
 WHERE id = $1 AND deleted_at IS NULL
 `
@@ -219,6 +325,9 @@ type GetCommentByIDRow struct {
 	UserID    pgtype.UUID        `json:"user_id"`
 	PostID    pgtype.UUID        `json:"post_id"`
 	Content   pgtype.Text        `json:"content"`
+	ParentID  pgtype.UUID        `json:"parent_id"`
+	RootID    pgtype.UUID        `json:"root_id"`
+	Level     pgtype.Int4        `json:"level"`
 }
 
 func (q *Queries) GetCommentByID(ctx context.Context, id pgtype.UUID) (GetCommentByIDRow, error) {
@@ -232,12 +341,15 @@ func (q *Queries) GetCommentByID(ctx context.Context, id pgtype.UUID) (GetCommen
 		&i.UserID,
 		&i.PostID,
 		&i.Content,
+		&i.ParentID,
+		&i.RootID,
+		&i.Level,
 	)
 	return i, err
 }
 
 const getCommentsByPostID = `-- name: GetCommentsByPostID :many
-SELECT id, created_at, updated_at, deleted_at, user_id, post_id, content
+SELECT id, created_at, updated_at, deleted_at, user_id, post_id, content, parent_id, root_id, level
 FROM comments 
 WHERE deleted_at IS NULL AND post_id = $1
 ORDER BY created_at ASC 
@@ -258,6 +370,9 @@ type GetCommentsByPostIDRow struct {
 	UserID    pgtype.UUID        `json:"user_id"`
 	PostID    pgtype.UUID        `json:"post_id"`
 	Content   pgtype.Text        `json:"content"`
+	ParentID  pgtype.UUID        `json:"parent_id"`
+	RootID    pgtype.UUID        `json:"root_id"`
+	Level     pgtype.Int4        `json:"level"`
 }
 
 func (q *Queries) GetCommentsByPostID(ctx context.Context, arg GetCommentsByPostIDParams) ([]GetCommentsByPostIDRow, error) {
@@ -277,6 +392,9 @@ func (q *Queries) GetCommentsByPostID(ctx context.Context, arg GetCommentsByPost
 			&i.UserID,
 			&i.PostID,
 			&i.Content,
+			&i.ParentID,
+			&i.RootID,
+			&i.Level,
 		); err != nil {
 			return nil, err
 		}
@@ -288,25 +406,42 @@ func (q *Queries) GetCommentsByPostID(ctx context.Context, arg GetCommentsByPost
 	return items, nil
 }
 
+const getLikeByUserAndTarget = `-- name: GetLikeByUserAndTarget :one
+SELECT id, created_at, updated_at, deleted_at, user_id, target_id, target_type
+FROM likes 
+WHERE user_id = $1 AND target_id = $2 AND target_type = $3 AND deleted_at IS NULL
+`
+
+type GetLikeByUserAndTargetParams struct {
+	UserID     pgtype.UUID `json:"user_id"`
+	TargetID   pgtype.UUID `json:"target_id"`
+	TargetType pgtype.Text `json:"target_type"`
+}
+
+func (q *Queries) GetLikeByUserAndTarget(ctx context.Context, arg GetLikeByUserAndTargetParams) (Like, error) {
+	row := q.db.QueryRow(ctx, getLikeByUserAndTarget, arg.UserID, arg.TargetID, arg.TargetType)
+	var i Like
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.UserID,
+		&i.TargetID,
+		&i.TargetType,
+	)
+	return i, err
+}
+
 const getPostByID = `-- name: GetPostByID :one
-SELECT id, created_at, updated_at, deleted_at, user_id, content, status
+SELECT id, created_at, updated_at, deleted_at, user_id, content, media_urls, type, status
 FROM posts 
 WHERE id = $1 AND deleted_at IS NULL
 `
 
-type GetPostByIDRow struct {
-	ID        pgtype.UUID        `json:"id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
-	UserID    pgtype.UUID        `json:"user_id"`
-	Content   pgtype.Text        `json:"content"`
-	Status    pgtype.Text        `json:"status"`
-}
-
-func (q *Queries) GetPostByID(ctx context.Context, id pgtype.UUID) (GetPostByIDRow, error) {
+func (q *Queries) GetPostByID(ctx context.Context, id pgtype.UUID) (Post, error) {
 	row := q.db.QueryRow(ctx, getPostByID, id)
-	var i GetPostByIDRow
+	var i Post
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
@@ -314,13 +449,15 @@ func (q *Queries) GetPostByID(ctx context.Context, id pgtype.UUID) (GetPostByIDR
 		&i.DeletedAt,
 		&i.UserID,
 		&i.Content,
+		&i.MediaUrls,
+		&i.Type,
 		&i.Status,
 	)
 	return i, err
 }
 
 const getPosts = `-- name: GetPosts :many
-SELECT id, created_at, updated_at, deleted_at, user_id, content, status
+SELECT id, created_at, updated_at, deleted_at, user_id, content, media_urls, type, status
 FROM posts 
 WHERE deleted_at IS NULL AND status = $1
 ORDER BY created_at DESC 
@@ -333,25 +470,15 @@ type GetPostsParams struct {
 	Offset int32       `json:"offset"`
 }
 
-type GetPostsRow struct {
-	ID        pgtype.UUID        `json:"id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
-	UserID    pgtype.UUID        `json:"user_id"`
-	Content   pgtype.Text        `json:"content"`
-	Status    pgtype.Text        `json:"status"`
-}
-
-func (q *Queries) GetPosts(ctx context.Context, arg GetPostsParams) ([]GetPostsRow, error) {
+func (q *Queries) GetPosts(ctx context.Context, arg GetPostsParams) ([]Post, error) {
 	rows, err := q.db.Query(ctx, getPosts, arg.Status, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []GetPostsRow{}
+	items := []Post{}
 	for rows.Next() {
-		var i GetPostsRow
+		var i Post
 		if err := rows.Scan(
 			&i.ID,
 			&i.CreatedAt,
@@ -359,6 +486,8 @@ func (q *Queries) GetPosts(ctx context.Context, arg GetPostsParams) ([]GetPostsR
 			&i.DeletedAt,
 			&i.UserID,
 			&i.Content,
+			&i.MediaUrls,
+			&i.Type,
 			&i.Status,
 		); err != nil {
 			return nil, err
@@ -369,6 +498,25 @@ func (q *Queries) GetPosts(ctx context.Context, arg GetPostsParams) ([]GetPostsR
 		return nil, err
 	}
 	return items, nil
+}
+
+const getTopicByName = `-- name: GetTopicByName :one
+SELECT id, created_at, updated_at, deleted_at, name
+FROM topics 
+WHERE name = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) GetTopicByName(ctx context.Context, name string) (Topic, error) {
+	row := q.db.QueryRow(ctx, getTopicByName, name)
+	var i Topic
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.Name,
+	)
+	return i, err
 }
 
 const updatePostStatus = `-- name: UpdatePostStatus :exec

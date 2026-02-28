@@ -8,38 +8,38 @@ import (
 // Post 动态模型
 type Post struct {
 	baseModel.BaseModel
-	UserID    string          `gorm:"type:uuid" json:"userId"`
+	UserID    string          `json:"userId"`
 	Content   string          `json:"content"`
-	MediaURLs json.RawMessage `gorm:"type:jsonb" json:"mediaUrls"` // 存储图片/视频 URL 数组
-	Type      string          `json:"type"`                        // text, image, video
-	Status    string          `gorm:"default:'pending'" json:"status"` // pending, approved, rejected
+	MediaURLs json.RawMessage `json:"mediaUrls"` // 存储图片/视频 URL 数组
+	Type      string          `json:"type"`      // text, image, video
+	Status    string          `json:"status"`    // pending, approved, rejected
 
 	// 关联
 	Comments []Comment `json:"comments,omitempty"`
-	Topics   []Topic   `gorm:"many2many:post_topics;" json:"topics,omitempty"`
+	Topics   []Topic   `json:"topics,omitempty"`
 }
 
 // Topic 话题模型
 type Topic struct {
 	baseModel.BaseModel
-	Name string `gorm:"unique" json:"name"`
+	Name string `json:"name"`
 }
 
 // Comment 评论模型
 type Comment struct {
 	baseModel.BaseModel
-	PostID   string `gorm:"type:uuid" json:"postId"`
-	UserID   string `gorm:"type:uuid" json:"userId"`
+	PostID   string `json:"postId"`
+	UserID   string `json:"userId"`
 	Content  string `json:"content"`
-	ParentID string `gorm:"type:uuid" json:"parentId"` // 父评论ID (直接父评论)
-	RootID   string `gorm:"type:uuid" json:"rootId"`   // 根评论ID (一级评论ID，用于优化查询)
-	Level    int    `gorm:"default:1" json:"level"`    // 评论层级：1=一级评论，2=二级评论
+	ParentID string `json:"parentId"` // 父评论ID (直接父评论)
+	RootID   string `json:"rootId"`   // 根评论ID (一级评论ID，用于优化查询)
+	Level    int    `json:"level"`    // 评论层级：1=一级评论，2=二级评论
 }
 
 // Like 点赞模型
 type Like struct {
 	baseModel.BaseModel
-	UserID     string `gorm:"type:uuid" json:"userId"`
-	TargetID   string `gorm:"type:uuid" json:"targetId"`
+	UserID     string `json:"userId"`
+	TargetID   string `json:"targetId"`
 	TargetType string `json:"targetType"` // post, comment
 }

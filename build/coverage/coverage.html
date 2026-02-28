@@ -1,0 +1,894 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>service: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">user_crud_jwt/internal/domain/user/service/cached_test_standalone.go (0.0%)</option>
+				
+				<option value="file1">user_crud_jwt/internal/domain/user/service/cached_user_service.go (0.0%)</option>
+				
+				<option value="file2">user_crud_jwt/internal/domain/user/service/user_service.go (82.8%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">no coverage</span>
+				<span class="cov1">low coverage</span>
+				<span class="cov2">*</span>
+				<span class="cov3">*</span>
+				<span class="cov4">*</span>
+				<span class="cov5">*</span>
+				<span class="cov6">*</span>
+				<span class="cov7">*</span>
+				<span class="cov8">*</span>
+				<span class="cov9">*</span>
+				<span class="cov10">high coverage</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package service
+
+import (
+        "context"
+        "encoding/json"
+        "errors"
+        "fmt"
+        "path/filepath"
+        "sync"
+        "testing"
+        "time"
+        "user_crud_jwt/internal/domain/user/model"
+        "user_crud_jwt/internal/domain/user/repository"
+
+        "github.com/stretchr/testify/assert"
+        "github.com/stretchr/testify/require"
+)
+
+// TestOTPService 简单的OTP服务用于测试
+type TestOTPService struct{}
+
+func (s *TestOTPService) Send(mobile string) (string, error) <span class="cov0" title="0">{
+        return "123456", nil
+}</span>
+
+func (s *TestOTPService) Verify(mobile, code string) bool <span class="cov0" title="0">{
+        return code == "123456"
+}</span>
+
+// TestCacheService 模拟缓存服务
+type TestCacheService struct {
+        data map[string]*cacheItem
+        mu   sync.RWMutex
+}
+
+type cacheItem struct {
+        value      interface{}
+        expiration time.Time
+}
+
+func NewTestCacheService() *TestCacheService <span class="cov0" title="0">{
+        return &amp;TestCacheService{
+                data: make(map[string]*cacheItem),
+        }
+}</span>
+
+var ErrCacheMiss = errors.New("cache miss")
+
+func (m *TestCacheService) Get(ctx context.Context, key string, dest interface{}) error <span class="cov0" title="0">{
+        m.mu.RLock()
+        defer m.mu.RUnlock()
+
+        item, exists := m.data[key]
+        if !exists || time.Now().After(item.expiration) </span><span class="cov0" title="0">{
+                return ErrCacheMiss
+        }</span>
+
+        <span class="cov0" title="0">data, err := json.Marshal(item.value)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("cache marshal error: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return json.Unmarshal(data, dest)</span>
+}
+
+func (m *TestCacheService) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error <span class="cov0" title="0">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+
+        m.data[key] = &amp;cacheItem{
+                value:      value,
+                expiration: time.Now().Add(expiration),
+        }
+        return nil
+}</span>
+
+func (m *TestCacheService) Delete(ctx context.Context, key string) error <span class="cov0" title="0">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+
+        delete(m.data, key)
+        return nil
+}</span>
+
+func (m *TestCacheService) Exists(ctx context.Context, key string) (bool, error) <span class="cov0" title="0">{
+        m.mu.RLock()
+        defer m.mu.RUnlock()
+
+        item, exists := m.data[key]
+        if !exists </span><span class="cov0" title="0">{
+                return false, nil
+        }</span>
+
+        <span class="cov0" title="0">if time.Now().After(item.expiration) </span><span class="cov0" title="0">{
+                delete(m.data, key)
+                return false, nil
+        }</span>
+
+        <span class="cov0" title="0">return true, nil</span>
+}
+
+func (m *TestCacheService) GetWithTTL(ctx context.Context, key string, dest interface{}) (time.Duration, error) <span class="cov0" title="0">{
+        m.mu.RLock()
+        defer m.mu.RUnlock()
+
+        item, exists := m.data[key]
+        if !exists </span><span class="cov0" title="0">{
+                return 0, ErrCacheMiss
+        }</span>
+
+        <span class="cov0" title="0">if time.Now().After(item.expiration) </span><span class="cov0" title="0">{
+                delete(m.data, key)
+                return 0, ErrCacheMiss
+        }</span>
+
+        <span class="cov0" title="0">ttl := time.Until(item.expiration)
+
+        data, err := json.Marshal(item.value)
+        if err != nil </span><span class="cov0" title="0">{
+                return 0, fmt.Errorf("cache marshal error: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">if err := json.Unmarshal(data, dest); err != nil </span><span class="cov0" title="0">{
+                return 0, fmt.Errorf("cache unmarshal error: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return ttl, nil</span>
+}
+
+func (m *TestCacheService) SetWithTTL(ctx context.Context, key string, value interface{}) error <span class="cov0" title="0">{
+        return m.Set(ctx, key, value, time.Hour)
+}</span>
+
+func (m *TestCacheService) InvalidatePattern(ctx context.Context, pattern string) error <span class="cov0" title="0">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+
+        for key := range m.data </span><span class="cov0" title="0">{
+                if matched, _ := filepath.Match(pattern, key); matched </span><span class="cov0" title="0">{
+                        delete(m.data, key)
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+func (m *TestCacheService) GetMultiple(ctx context.Context, keys []string, dest interface{}) error <span class="cov0" title="0">{
+        m.mu.RLock()
+        defer m.mu.RUnlock()
+
+        results := make([]interface{}, len(keys))
+        for i, key := range keys </span><span class="cov0" title="0">{
+                if item, exists := m.data[key]; exists &amp;&amp; !time.Now().After(item.expiration) </span><span class="cov0" title="0">{
+                        results[i] = item.value
+                }</span>
+        }
+
+        <span class="cov0" title="0">data, err := json.Marshal(results)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("cache marshal error: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return json.Unmarshal(data, dest)</span>
+}
+
+func (m *TestCacheService) Clear(ctx context.Context) error <span class="cov0" title="0">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+
+        m.data = make(map[string]*cacheItem)
+        return nil
+}</span>
+
+func TestCachedUserService_BasicOperations(t *testing.T) <span class="cov0" title="0">{
+        mockRepo := repository.NewSimpleUserRepository(nil)
+        mockOTP := &amp;TestOTPService{}
+        mockCache := NewTestCacheService()
+        service := NewCachedUserService(mockRepo, mockOTP, mockCache)
+        ctx := context.Background()
+
+        t.Run("New user registration with cache", func(t *testing.T) </span><span class="cov0" title="0">{
+                mobile := "13800138000"
+                code := "123456"
+
+                // 发送OTP
+                err := service.SendOTP(ctx, mobile)
+                assert.NoError(t, err)
+
+                // 注册新用户
+                token, err := service.LoginOrRegister(ctx, mobile, code)
+                assert.NoError(t, err)
+                assert.NotEmpty(t, token)
+
+                // 验证用户已缓存
+                cacheKey := "user:mobile:" + mobile
+                var cachedUser model.User
+                err = mockCache.Get(ctx, cacheKey, &amp;cachedUser)
+                assert.NoError(t, err)
+                assert.Equal(t, mobile, cachedUser.Mobile)
+        }</span>)
+
+        <span class="cov0" title="0">t.Run("Get user from cache", func(t *testing.T) </span><span class="cov0" title="0">{
+                mobile := "13800138001"
+                code := "123456"
+
+                // 注册用户
+                err := service.SendOTP(ctx, mobile)
+                assert.NoError(t, err)
+
+                token, err := service.LoginOrRegister(ctx, mobile, code)
+                assert.NoError(t, err)
+
+                // 获取用户信息
+                user, err := service.GetUser(ctx, token)
+                assert.NoError(t, err)
+                assert.Equal(t, mobile, user.Mobile)
+
+                // 验证用户被缓存
+                cacheKey := "user:id:" + user.ID
+                var cachedUser model.User
+                err = mockCache.Get(ctx, cacheKey, &amp;cachedUser)
+                assert.NoError(t, err)
+                assert.Equal(t, user.ID, cachedUser.ID)
+        }</span>)
+
+        <span class="cov0" title="0">t.Run("Update user and cache", func(t *testing.T) </span><span class="cov0" title="0">{
+                mobile := "13800138002"
+                code := "123456"
+
+                // 注册用户
+                err := service.SendOTP(ctx, mobile)
+                assert.NoError(t, err)
+
+                token, err := service.LoginOrRegister(ctx, mobile, code)
+                require.NoError(t, err)
+
+                // 获取用户ID
+                user, err := service.GetUser(ctx, token)
+                require.NoError(t, err)
+
+                // 更新用户信息
+                newNickname := "Updated User"
+                newAvatarURL := "https://example.com/avatar.jpg"
+
+                updatedUser, err := service.UpdateUser(ctx, user.ID, newNickname, newAvatarURL)
+                assert.NoError(t, err)
+                assert.Equal(t, newNickname, updatedUser.Nickname)
+                assert.Equal(t, newAvatarURL, updatedUser.AvatarURL)
+
+                // 验证缓存被更新
+                cacheKey := "user:id:" + user.ID
+                var cachedUser model.User
+                err = mockCache.Get(ctx, cacheKey, &amp;cachedUser)
+                assert.NoError(t, err)
+
+                assert.Equal(t, newNickname, cachedUser.Nickname)
+                assert.Equal(t, newAvatarURL, cachedUser.AvatarURL)
+        }</span>)
+
+        <span class="cov0" title="0">t.Run("Delete user and clear cache", func(t *testing.T) </span><span class="cov0" title="0">{
+                mobile := "13800138003"
+                code := "123456"
+
+                // 注册用户
+                err := service.SendOTP(ctx, mobile)
+                assert.NoError(t, err)
+
+                token, err := service.LoginOrRegister(ctx, mobile, code)
+                require.NoError(t, err)
+
+                // 获取用户ID
+                user, err := service.GetUser(ctx, token)
+                require.NoError(t, err)
+
+                // 删除用户
+                err = service.DeleteUser(ctx, user.ID)
+                assert.NoError(t, err)
+
+                // 验证缓存被清除
+                cacheKey := "user:id:" + user.ID
+                var cachedUser model.User
+                err = mockCache.Get(ctx, cacheKey, &amp;cachedUser)
+                assert.Error(t, err)
+                assert.Equal(t, ErrCacheMiss, err)
+        }</span>)
+}
+
+func TestCachedUserService_Performance(t *testing.T) <span class="cov0" title="0">{
+        mockRepo := repository.NewSimpleUserRepository(nil)
+        mockOTP := &amp;TestOTPService{}
+        mockCache := NewTestCacheService()
+        service := NewCachedUserService(mockRepo, mockOTP, mockCache)
+        ctx := context.Background()
+
+        // 创建用户
+        mobile := "13800138004"
+        code := "123456"
+
+        err := service.SendOTP(ctx, mobile)
+        assert.NoError(t, err)
+
+        token, err := service.LoginOrRegister(ctx, mobile, code)
+        require.NoError(t, err)
+
+        // 获取用户ID
+        _, err = service.GetUser(ctx, token)
+        require.NoError(t, err)
+
+        // 测试缓存命中
+        start := time.Now()
+        for i := 0; i &lt; 1000; i++ </span><span class="cov0" title="0">{
+                _, err := service.GetUser(ctx, token)
+                assert.NoError(t, err)
+        }</span>
+        <span class="cov0" title="0">duration := time.Since(start)
+
+        t.Logf("1000 cache hits took: %v (avg: %v per request)", duration, duration/1000)
+        assert.Less(t, duration, 100*time.Millisecond, "Cache should be fast")</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package service
+
+import (
+        "context"
+        "errors"
+        "fmt"
+        "time"
+        "user_crud_jwt/internal/domain/user/model"
+        "user_crud_jwt/internal/domain/user/repository"
+        "user_crud_jwt/internal/pkg/otp"
+        "user_crud_jwt/pkg/cache"
+        "user_crud_jwt/pkg/utils"
+)
+
+// CachedUserService 带缓存的用户服务
+type CachedUserService struct {
+        repo  repository.UserRepository
+        otp   otp.OTPService
+        cache cache.CacheService
+}
+
+// NewCachedUserService 创建带缓存的用户服务
+func NewCachedUserService(repo repository.UserRepository, otp otp.OTPService, cache cache.CacheService) UserService <span class="cov0" title="0">{
+        return &amp;CachedUserService{
+                repo:  repo,
+                otp:   otp,
+                cache: cache,
+        }
+}</span>
+
+// LoginOrRegister 登录或注册（带缓存）
+func (s *CachedUserService) LoginOrRegister(ctx context.Context, mobile, code string) (string, error) <span class="cov0" title="0">{
+        // 1. 验证验证码
+        if !s.otp.Verify(mobile, code) </span><span class="cov0" title="0">{
+                return "", errors.New("invalid verification code")
+        }</span>
+
+        // 2. 查询用户是否存在（先查缓存）
+        <span class="cov0" title="0">cacheKey := fmt.Sprintf("user:mobile:%s", mobile)
+        user, err := s.getUserFromCache(ctx, cacheKey)
+        if err != nil </span><span class="cov0" title="0">{
+                // 缓存未命中，从数据库查询
+                user, err = s.repo.GetByMobile(ctx, mobile)
+                if err != nil </span><span class="cov0" title="0">{
+                        if err.Error() == "user not found" </span><span class="cov0" title="0">{
+                                // 3. 不存在则注册
+                                user = model.NewUser(mobile, "User_"+mobile[len(mobile)-4:])
+
+                                if err := s.repo.Create(ctx, user); err != nil </span><span class="cov0" title="0">{
+                                        return "", err
+                                }</span>
+                        } else<span class="cov0" title="0"> {
+                                return "", err
+                        }</span>
+                }
+
+                // 缓存用户信息
+                <span class="cov0" title="0">s.setUserCache(ctx, cacheKey, user, 5*time.Minute)</span>
+        }
+
+        // 4. 检查用户状态
+        <span class="cov0" title="0">if user.Status == model.StatusBanned </span><span class="cov0" title="0">{
+                if user.BannedUntil != nil &amp;&amp; user.BannedUntil.After(time.Now()) </span><span class="cov0" title="0">{
+                        return "", errors.New("account is banned")
+                }</span>
+                // 封禁时间已过，解除封禁
+                <span class="cov0" title="0">user.Status = model.StatusNormal
+                user.BannedUntil = nil</span>
+        }
+
+        <span class="cov0" title="0">if user.Status == model.StatusDeleted </span><span class="cov0" title="0">{
+                return "", errors.New("account has been deleted")
+        }</span>
+
+        // 5. 生成JWT token
+        <span class="cov0" title="0">token, tokenExpireAt, err := utils.GenerateToken(user.ID, user.Role)
+        if err != nil </span><span class="cov0" title="0">{
+                return "", err
+        }</span>
+
+        // 6. 保存token到用户记录
+        <span class="cov0" title="0">user.Token = token
+        user.TokenExpireAt = tokenExpireAt
+        if err := s.repo.Update(ctx, user); err != nil </span><span class="cov0" title="0">{
+                return "", err
+        }</span>
+
+        // 7. 更新缓存
+        <span class="cov0" title="0">s.setUserCache(ctx, cacheKey, user, 5*time.Minute)
+        s.setUserCache(ctx, fmt.Sprintf("user:id:%s", user.ID), user, 10*time.Minute)
+
+        return token, nil</span>
+}
+
+// SendOTP 发送验证码
+func (s *CachedUserService) SendOTP(ctx context.Context, mobile string) error <span class="cov0" title="0">{
+        _, err := s.otp.Send(mobile)
+        return err
+}</span>
+
+// GetUsers 获取用户列表（带缓存）
+func (s *CachedUserService) GetUsers(ctx context.Context, page, limit int) ([]model.User, int64, error) <span class="cov0" title="0">{
+        if page &lt;= 0 </span><span class="cov0" title="0">{
+                page = 1
+        }</span>
+        <span class="cov0" title="0">if limit &lt;= 0 </span><span class="cov0" title="0">{
+                limit = 10
+        }</span>
+
+        <span class="cov0" title="0">cacheKey := fmt.Sprintf("users:list:page:%d:limit:%d", page, limit)
+
+        // 尝试从缓存获取
+        var cachedUsers []model.User
+        if err := s.cache.Get(ctx, cacheKey, &amp;cachedUsers); err == nil </span><span class="cov0" title="0">{
+                // 从缓存获取总数
+                var total int64
+                totalKey := fmt.Sprintf("users:total")
+                if err := s.cache.Get(ctx, totalKey, &amp;total); err == nil </span><span class="cov0" title="0">{
+                        return cachedUsers, total, nil
+                }</span>
+        }
+
+        <span class="cov0" title="0">offset := (page - 1) * limit
+        users, err := s.repo.GetList(ctx, limit, offset)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, 0, err
+        }</span>
+
+        <span class="cov0" title="0">total, err := s.repo.Count(ctx)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, 0, err
+        }</span>
+
+        // 缓存结果
+        <span class="cov0" title="0">s.cache.Set(ctx, cacheKey, users, 2*time.Minute)
+        s.cache.Set(ctx, "users:total", total, 5*time.Minute)
+
+        // 转换指针切片为值切片
+        result := make([]model.User, len(users))
+        for i, user := range users </span><span class="cov0" title="0">{
+                result[i] = *user
+        }</span>
+
+        <span class="cov0" title="0">return result, total, nil</span>
+}
+
+// GetUser 获取用户信息（带缓存）
+func (s *CachedUserService) GetUser(ctx context.Context, id string) (*model.User, error) <span class="cov0" title="0">{
+        cacheKey := fmt.Sprintf("user:id:%s", id)
+
+        // 先从缓存获取
+        var user model.User
+        if err := s.cache.Get(ctx, cacheKey, &amp;user); err == nil </span><span class="cov0" title="0">{
+                return &amp;user, nil
+        }</span>
+
+        // 缓存未命中，从数据库查询
+        <span class="cov0" title="0">dbUser, err := s.repo.GetByID(ctx, id)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        // 缓存用户信息
+        <span class="cov0" title="0">s.setUserCache(ctx, cacheKey, dbUser, 10*time.Minute)
+
+        return dbUser, nil</span>
+}
+
+// UpdateUser 更新用户信息（带缓存）
+func (s *CachedUserService) UpdateUser(ctx context.Context, id string, nickname, avatarURL string) (*model.User, error) <span class="cov0" title="0">{
+        user, err := s.GetUser(ctx, id)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">if nickname != "" </span><span class="cov0" title="0">{
+                user.Nickname = nickname
+        }</span>
+        <span class="cov0" title="0">if avatarURL != "" </span><span class="cov0" title="0">{
+                user.AvatarURL = avatarURL
+        }</span>
+
+        <span class="cov0" title="0">if err := s.repo.Update(ctx, user); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        // 清除相关缓存
+        <span class="cov0" title="0">s.clearUserCache(ctx, id)
+        s.clearUserCache(ctx, fmt.Sprintf("user:mobile:%s", user.Mobile))
+
+        return user, nil</span>
+}
+
+// UpgradeMember 升级会员（带缓存）
+func (s *CachedUserService) UpgradeMember(ctx context.Context, userID string, duration time.Duration) error <span class="cov0" title="0">{
+        err := s.repo.UpdateMemberStatus(ctx, userID, 1) // 1 表示会员状态
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // 清除用户缓存
+        <span class="cov0" title="0">s.clearUserCache(ctx, userID)
+
+        return nil</span>
+}
+
+// DeleteUser 删除用户（带缓存）
+func (s *CachedUserService) DeleteUser(ctx context.Context, id string) error <span class="cov0" title="0">{
+        user, err := s.GetUser(ctx, id)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov0" title="0">user.Status = model.StatusDeleted
+        err = s.repo.Update(ctx, user)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // 清除所有相关缓存
+        <span class="cov0" title="0">s.clearUserCache(ctx, id)
+        s.clearUserCache(ctx, fmt.Sprintf("user:mobile:%s", user.Mobile))
+
+        return nil</span>
+}
+
+// getUserFromCache 从缓存获取用户信息
+func (s *CachedUserService) getUserFromCache(ctx context.Context, key string) (*model.User, error) <span class="cov0" title="0">{
+        var user model.User
+        if err := s.cache.Get(ctx, key, &amp;user); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">return &amp;user, nil</span>
+}
+
+// setUserCache 设置用户缓存
+func (s *CachedUserService) setUserCache(ctx context.Context, key string, user *model.User, ttl time.Duration) <span class="cov0" title="0">{
+        s.cache.Set(ctx, key, user, ttl)
+}</span>
+
+// clearUserCache 清除用户相关缓存
+func (s *CachedUserService) clearUserCache(ctx context.Context, id string) <span class="cov0" title="0">{
+        keys := []string{
+                fmt.Sprintf("user:id:%s", id),
+        }
+
+        // 清除用户信息缓存
+        for _, key := range keys </span><span class="cov0" title="0">{
+                s.cache.Delete(ctx, key)
+        }</span>
+
+        // 清除用户列表缓存
+        <span class="cov0" title="0">s.cache.Delete(ctx, "users:total")</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package service
+
+import (
+        "context"
+        "errors"
+        "log"
+        "time"
+        "user_crud_jwt/internal/domain/user/model"
+        "user_crud_jwt/internal/domain/user/repository"
+        "user_crud_jwt/internal/pkg/otp"
+        "user_crud_jwt/pkg/utils"
+)
+
+// UserService 用户服务接口
+type UserService interface {
+        LoginOrRegister(ctx context.Context, mobile, code string) (string, error)
+        SendOTP(ctx context.Context, mobile string) error
+        GetUsers(ctx context.Context, page, limit int) ([]model.User, int64, error)
+        GetUser(ctx context.Context, id string) (*model.User, error)
+        UpdateUser(ctx context.Context, id string, nickname, avatarURL string) (*model.User, error)
+        UpgradeMember(ctx context.Context, userID string, duration time.Duration) error
+        DeleteUser(ctx context.Context, id string) error
+}
+
+// userService 实现
+type userService struct {
+        repo repository.UserRepository
+        otp  otp.OTPService
+}
+
+// NewUserService 创建用户服务
+func NewUserService(repo repository.UserRepository, otp otp.OTPService) UserService <span class="cov3" title="12">{
+        return &amp;userService{repo: repo, otp: otp}
+}</span>
+
+// LoginOrRegister 登录或注册
+func (s *userService) LoginOrRegister(ctx context.Context, mobile, code string) (string, error) <span class="cov9" title="1107">{
+        log.Printf("[UserService] LoginOrRegister called with mobile: %s, code: %s", mobile, code)
+
+        // 1. 验证验证码
+        log.Printf("[UserService] Verifying OTP code...")
+        if !s.otp.Verify(mobile, code) </span><span class="cov1" title="1">{
+                log.Printf("[UserService] OTP verification failed for mobile: %s", mobile)
+                return "", errors.New("invalid verification code")
+        }</span>
+        <span class="cov9" title="1106">log.Printf("[UserService] OTP verification successful for mobile: %s", mobile)
+
+        // 2. 查询用户是否存在
+        log.Printf("[UserService] Checking if user exists for mobile: %s", mobile)
+        user, err := s.repo.GetByMobile(ctx, mobile)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[UserService] Database error when getting user: %v", err)
+                return "", err
+        }</span>
+
+        <span class="cov9" title="1106">if user == nil </span><span class="cov7" title="153">{
+                log.Printf("[UserService] User not found, creating new user for mobile: %s", mobile)
+                // 3. 不存在则注册
+                user = model.NewUser(mobile, "User_"+mobile[len(mobile)-4:])
+                log.Printf("[UserService] Created new user with ID: %s", user.ID)
+
+                if err := s.repo.Create(ctx, user); err != nil </span><span class="cov0" title="0">{
+                        log.Printf("[UserService] Failed to create user: %v", err)
+                        return "", err
+                }</span>
+                <span class="cov7" title="153">log.Printf("[UserService] User created successfully")</span>
+        } else<span class="cov9" title="953"> {
+                log.Printf("[UserService] Found existing user with ID: %s", user.ID)
+        }</span>
+
+        // 4. 检查用户状态
+        <span class="cov9" title="1106">log.Printf("[UserService] Checking user status - Status: %d, Role: %d", user.Status, user.Role)
+        if user.Status == model.StatusBanned </span><span class="cov1" title="2">{
+                if user.BannedUntil != nil &amp;&amp; user.BannedUntil.After(time.Now()) </span><span class="cov1" title="1">{
+                        log.Printf("[UserService] Account is banned until: %v", user.BannedUntil)
+                        return "", errors.New("account is banned")
+                }</span>
+                // 封禁时间已过，解除封禁
+                <span class="cov1" title="1">log.Printf("[UserService] Ban expired, lifting ban")
+                user.Status = model.StatusNormal
+                user.BannedUntil = nil</span>
+        }
+
+        <span class="cov9" title="1105">if user.Status == model.StatusDeleted </span><span class="cov1" title="1">{
+                log.Printf("[UserService] Account has been deleted")
+                return "", errors.New("account has been deleted")
+        }</span>
+
+        // 5. 生成JWT token
+        <span class="cov9" title="1104">log.Printf("[UserService] Generating JWT token for user ID: %s", user.ID)
+        token, tokenExpireAt, err := utils.GenerateToken(user.ID, user.Role)
+        if err != nil </span><span class="cov0" title="0">{
+                log.Printf("[UserService] Failed to generate JWT token: %v", err)
+                return "", err
+        }</span>
+        <span class="cov9" title="1104">log.Printf("[UserService] JWT token generated successfully")
+
+        // 6. 保存token到用户记录
+        user.Token = token
+        user.TokenExpireAt = tokenExpireAt
+        log.Printf("[UserService] Updating user record with token")
+        if err := s.repo.Update(ctx, user); err != nil </span><span class="cov0" title="0">{
+                log.Printf("[UserService] Failed to update user record: %v", err)
+                return "", err
+        }</span>
+        <span class="cov9" title="1104">log.Printf("[UserService] User record updated successfully")
+
+        log.Printf("[UserService] Login process completed successfully")
+        return token, nil</span>
+}
+
+// SendOTP 发送验证码
+func (s *userService) SendOTP(ctx context.Context, mobile string) error <span class="cov1" title="1">{
+        _, err := s.otp.Send(mobile)
+        return err
+}</span>
+
+// GetUsers 获取用户列表
+func (s *userService) GetUsers(ctx context.Context, page, limit int) ([]model.User, int64, error) <span class="cov6" title="94">{
+        // 获取总数
+        total, err := s.repo.Count(ctx)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, 0, err
+        }</span>
+
+        <span class="cov6" title="94">offset := (page - 1) * limit
+        users, err := s.repo.GetList(ctx, limit, offset) // 修正参数顺序
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, 0, err
+        }</span>
+
+        // 转换指针切片为值切片
+        <span class="cov6" title="94">result := make([]model.User, len(users))
+        for i, user := range users </span><span class="cov10" title="1779">{
+                result[i] = *user
+        }</span>
+
+        <span class="cov6" title="94">return result, total, nil</span>
+}
+
+// GetUser 获取用户信息
+func (s *userService) GetUser(ctx context.Context, id string) (*model.User, error) <span class="cov5" title="31">{
+        return s.repo.GetByID(ctx, id)
+}</span>
+
+// UpdateUser 更新用户信息
+func (s *userService) UpdateUser(ctx context.Context, id string, nickname, avatarURL string) (*model.User, error) <span class="cov5" title="36">{
+        user, err := s.repo.GetByID(ctx, id)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov5" title="36">if nickname != "" </span><span class="cov5" title="36">{
+                user.Nickname = nickname
+        }</span>
+        <span class="cov5" title="36">if avatarURL != "" </span><span class="cov0" title="0">{
+                user.AvatarURL = avatarURL
+        }</span>
+
+        <span class="cov5" title="36">if err := s.repo.Update(ctx, user); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov5" title="36">return user, nil</span>
+}
+
+// UpgradeMember 升级会员
+func (s *userService) UpgradeMember(ctx context.Context, userID string, duration time.Duration) error <span class="cov3" title="7">{
+        user, err := s.repo.GetByID(ctx, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov3" title="7">var expireAt time.Time
+        if user.MemberExpireAt != nil &amp;&amp; user.MemberExpireAt.After(time.Now()) </span><span class="cov2" title="3">{
+                // 如果已经是会员，在原有时间基础上延长
+                expireAt = user.MemberExpireAt.Add(duration)
+        }</span> else<span class="cov2" title="4"> {
+                // 如果不是会员，从现在开始计算
+                expireAt = time.Now().Add(duration)
+        }</span>
+
+        // 更新用户的会员过期时间
+        <span class="cov3" title="7">user.MemberExpireAt = &amp;expireAt
+        user.IsMember = true
+        user.Status = model.StatusNormal
+
+        return s.repo.Update(ctx, user)</span>
+}
+
+// DeleteUser 删除用户
+func (s *userService) DeleteUser(ctx context.Context, id string) error <span class="cov1" title="1">{
+        user, err := s.repo.GetByID(ctx, id)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov1" title="1">user.Status = model.StatusDeleted
+        return s.repo.Update(ctx, user)</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

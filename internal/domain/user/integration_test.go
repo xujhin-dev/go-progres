@@ -30,7 +30,7 @@ func TestUserIntegration(t *testing.T) {
 	}()
 
 	// 创建依赖
-	userRepo := repository.NewUserRepository(db)
+	userRepo := repository.NewSimpleUserRepository(db)
 	otpService := otp.NewOTPService(nil) // 使用内存 OTP 服务
 	userService := service.NewUserService(userRepo, otpService)
 

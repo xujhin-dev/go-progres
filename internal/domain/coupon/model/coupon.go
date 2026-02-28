@@ -8,18 +8,18 @@ import (
 // Coupon 优惠券定义
 type Coupon struct {
 	baseModel.BaseModel
-	Name      string    `gorm:"type:varchar(100);not null" json:"name"`
-	Total     int       `gorm:"not null" json:"total"`
-	Stock     int       `gorm:"not null" json:"stock"` // 剩余库存
-	Amount    float64   `gorm:"not null" json:"amount"`
-	StartTime time.Time `gorm:"not null" json:"startTime"`
-	EndTime   time.Time `gorm:"not null" json:"endTime"`
+	Name      string    `json:"name"`
+	Total     int       `json:"total"`
+	Stock     int       `json:"stock"` // 剩余库存
+	Amount    float64   `json:"amount"`
+	StartTime time.Time `json:"startTime"`
+	EndTime   time.Time `json:"endTime"`
 }
 
 // UserCoupon 用户领取的优惠券
 type UserCoupon struct {
 	baseModel.BaseModel
-	UserID   string `gorm:"type:uuid;index;not null" json:"userId"`
-	CouponID string `gorm:"type:uuid;index;not null" json:"couponId"`
-	Status   int    `gorm:"default:1" json:"status"` // 1:未使用, 2:已使用, 3:已过期
+	UserID   string `json:"userId"`
+	CouponID string `json:"couponId"`
+	Status   int    `json:"status"` // 1:未使用, 2:已使用, 3:已过期
 }

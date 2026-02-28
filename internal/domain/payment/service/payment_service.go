@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -58,7 +57,7 @@ func (s *paymentService) CreateOrder(userID string, amount float64, channel, sub
 		Channel: channel,
 		Subject: subject,
 	}
-	if err := s.repo.CreateOrder(order); err != nil {
+	if err := s.repo.CreateOrder(context.Background(), order); err != nil {
 		return nil, "", err
 	}
 
@@ -85,20 +84,16 @@ func (s *paymentService) HandleNotify(channel string, params interface{}) error 
 	}
 
 	if !success {
-		return s.repo.UpdateOrderStatus(orderNo, model.OrderStatusCancelled, nil, nil)
+		return s.repo.UpdateOrderStatus(context.Background(), orderNo, model.OrderStatusCancelled)
 	}
 
 	// 2. 更新订单状态
-	now := time.Now()
-	// 这里可以把原始回调参数存入 extra_params
-	extraJSON, _ := json.Marshal(params)
-
-	if err := s.repo.UpdateOrderStatus(orderNo, model.OrderStatusPaid, &now, extraJSON); err != nil {
+	if err := s.repo.UpdateOrderStatus(context.Background(), orderNo, model.OrderStatusPaid); err != nil {
 		return err
 	}
 
 	// 3. 业务集成：查询订单信息以获取 UserID
-	order, err := s.repo.GetOrderByNo(orderNo)
+	order, err := s.repo.GetOrderByNo(context.Background(), orderNo)
 	if err != nil {
 		// 记录严重错误：订单状态已更新但无法获取订单详情
 		return err
@@ -109,7 +104,7 @@ func (s *paymentService) HandleNotify(channel string, params interface{}) error 
 	// 这里简化逻辑：只要支付成功就送30天
 	if err := s.userService.UpgradeMember(context.Background(), order.UserID, 30*24*time.Hour); err != nil {
 		// 记录错误，可能需要人工介入或重试
-		fmt.Printf("Failed to upgrade member for user %d: %v\n", order.UserID, err)
+		fmt.Printf("Failed to upgrade member for user %s: %v\n", order.UserID, err)
 	}
 
 	// 5. 推送通知

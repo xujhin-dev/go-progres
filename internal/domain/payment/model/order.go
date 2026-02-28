@@ -9,13 +9,13 @@ import (
 // Order 订单模型
 type Order struct {
 	baseModel.BaseModel
-	OrderNo     string          `gorm:"unique;not null" json:"orderNo"`
-	UserID      string          `gorm:"type:uuid" json:"userId"`
+	OrderNo     string          `json:"orderNo"`
+	UserID      string          `json:"userId"`
 	Amount      float64         `json:"amount"`
-	Status      string          `gorm:"default:'pending'" json:"status"` // pending, paid, cancelled, refunded
-	Channel     string          `json:"channel"`                         // alipay, wechat
+	Status      string          `json:"status"`  // pending, paid, cancelled, refunded
+	Channel     string          `json:"channel"` // alipay, wechat
 	Subject     string          `json:"subject"`
-	ExtraParams json.RawMessage `gorm:"type:jsonb" json:"extraParams"`
+	ExtraParams json.RawMessage `json:"extraParams"`
 	PaidAt      *time.Time      `json:"paidAt,omitempty"`
 }
 

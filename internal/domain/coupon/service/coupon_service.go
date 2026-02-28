@@ -48,7 +48,7 @@ func (s *couponService) CreateCoupon(name string, total int, amount float64, sta
 		EndTime:   endTime,
 	}
 
-	if err := s.repo.Create(coupon); err != nil {
+	if err := s.repo.Create(context.Background(), coupon); err != nil {
 		return nil, err
 	}
 

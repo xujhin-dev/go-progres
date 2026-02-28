@@ -15,12 +15,18 @@ type Querier interface {
 	CountPosts(ctx context.Context, status pgtype.Text) (int64, error)
 	CreateComment(ctx context.Context, arg CreateCommentParams) (CreateCommentRow, error)
 	CreateLike(ctx context.Context, arg CreateLikeParams) (Like, error)
-	CreatePost(ctx context.Context, arg CreatePostParams) (CreatePostRow, error)
+	CreatePost(ctx context.Context, arg CreatePostParams) (Post, error)
+	CreatePostTopic(ctx context.Context, arg CreatePostTopicParams) error
+	CreateTopic(ctx context.Context, arg CreateTopicParams) (Topic, error)
 	DeleteLike(ctx context.Context, arg DeleteLikeParams) error
+	DeletePostTopic(ctx context.Context, arg DeletePostTopicParams) error
+	GetAllTopics(ctx context.Context) ([]Topic, error)
 	GetCommentByID(ctx context.Context, id pgtype.UUID) (GetCommentByIDRow, error)
 	GetCommentsByPostID(ctx context.Context, arg GetCommentsByPostIDParams) ([]GetCommentsByPostIDRow, error)
-	GetPostByID(ctx context.Context, id pgtype.UUID) (GetPostByIDRow, error)
-	GetPosts(ctx context.Context, arg GetPostsParams) ([]GetPostsRow, error)
+	GetLikeByUserAndTarget(ctx context.Context, arg GetLikeByUserAndTargetParams) (Like, error)
+	GetPostByID(ctx context.Context, id pgtype.UUID) (Post, error)
+	GetPosts(ctx context.Context, arg GetPostsParams) ([]Post, error)
+	GetTopicByName(ctx context.Context, name string) (Topic, error)
 	UpdatePostStatus(ctx context.Context, arg UpdatePostStatusParams) error
 }
 

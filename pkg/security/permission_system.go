@@ -3,6 +3,7 @@ package security
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -16,42 +17,42 @@ type Permission string
 
 const (
 	// 用户权限
-	PermissionUserRead    Permission = "user:read"
-	PermissionUserWrite   Permission = "user:write"
-	PermissionUserDelete  Permission = "user:delete"
-	
+	PermissionUserRead   Permission = "user:read"
+	PermissionUserWrite  Permission = "user:write"
+	PermissionUserDelete Permission = "user:delete"
+
 	// 优惠券权限
 	PermissionCouponRead   Permission = "coupon:read"
 	PermissionCouponWrite  Permission = "coupon:write"
 	PermissionCouponDelete Permission = "coupon:delete"
-	
+
 	// 动态权限
 	PermissionMomentRead   Permission = "moment:read"
 	PermissionMomentWrite  Permission = "moment:write"
 	PermissionMomentDelete Permission = "moment:delete"
-	
+
 	// 支付权限
 	PermissionPaymentRead  Permission = "payment:read"
 	PermissionPaymentWrite Permission = "payment:write"
-	
+
 	// 管理员权限
-	PermissionAdminRead    Permission = "admin:read"
-	PermissionAdminWrite   Permission = "admin:write"
-	PermissionAdminDelete  Permission = "admin:delete"
-	PermissionAdminSystem  Permission = "admin:system"
-	
+	PermissionAdminRead   Permission = "admin:read"
+	PermissionAdminWrite  Permission = "admin:write"
+	PermissionAdminDelete Permission = "admin:delete"
+	PermissionAdminSystem Permission = "admin:system"
+
 	// 系统权限
 	PermissionSystemMonitor Permission = "system:monitor"
-	PermissionSystemConfig Permission = "system:config"
+	PermissionSystemConfig  Permission = "system:config"
 )
 
 // Role 角色定义
 type Role string
 
 const (
-	RoleUser      Role = "user"
-	RoleModerator Role = "moderator"
-	RoleAdmin     Role = "admin"
+	RoleUser       Role = "user"
+	RoleModerator  Role = "moderator"
+	RoleAdmin      Role = "admin"
 	RoleSuperAdmin Role = "super_admin"
 )
 
@@ -67,25 +68,25 @@ type PermissionChecker interface {
 
 // RBAC 基于角色的访问控制
 type RBAC struct {
-	cache          cache.CacheService
+	cache           cache.CacheService
 	rolePermissions map[Role][]Permission
-	userRoles      map[string]Role
+	userRoles       map[string]Role
 	userPermissions map[string][]Permission
-	mu             sync.RWMutex
+	mu              sync.RWMutex
 }
 
 // NewRBAC 创建 RBAC 实例
 func NewRBAC(cache cache.CacheService) *RBAC {
 	rbac := &RBAC{
-		cache:          cache,
+		cache:           cache,
 		rolePermissions: make(map[Role][]Permission),
-		userRoles:      make(map[string]Role),
+		userRoles:       make(map[string]Role),
 		userPermissions: make(map[string][]Permission),
 	}
 
 	// 初始化角色权限映射
 	rbac.initDefaultRoles()
-	
+
 	return rbac
 }
 
@@ -96,7 +97,7 @@ func (rbac *RBAC) initDefaultRoles() {
 		PermissionUserRead,
 		PermissionUserWrite,
 		PermissionCouponRead,
-	PermissionMomentRead,
+		PermissionMomentRead,
 		PermissionMomentWrite,
 	}
 
@@ -123,7 +124,7 @@ func (rbac *RBAC) initDefaultRoles() {
 		PermissionCouponWrite,
 		PermissionCouponDelete,
 		PermissionMomentRead,
-		PermissionWrite,
+		PermissionMomentWrite,
 		PermissionMomentDelete,
 		PermissionPaymentRead,
 		PermissionPaymentWrite,
@@ -140,8 +141,8 @@ func (rbac *RBAC) initDefaultRoles() {
 		PermissionCouponRead,
 		PermissionCouponWrite,
 		PermissionCouponDelete,
-	PermissionMomentRead,
-		PermissionWrite,
+		PermissionMomentRead,
+		PermissionMomentWrite,
 		PermissionMomentDelete,
 		PermissionPaymentRead,
 		PermissionPaymentWrite,
@@ -204,7 +205,7 @@ func (rbac *RBAC) HasRole(userID string, role Role) (bool, error) {
 	}
 
 	hasRole = (userRole == role)
-	
+
 	// 缓存结果
 	rbac.cache.Set(context.Background(), cacheKey, hasRole, time.Minute*30)
 	return hasRole, nil
@@ -283,7 +284,7 @@ func (rbac *RBAC) GetUserRole(userID string) (Role, error) {
 // AssignRole 为用户分配角色
 func (rbac *RBAC) AssignRole(userID string, role Role) error {
 	rbac.mu.Lock()
-	defer rbac.Unlock()
+	defer rbac.mu.Unlock()
 
 	// 更新用户角色
 	rbac.userRoles[userID] = role
@@ -300,7 +301,7 @@ func (rbac *RBAC) AssignRole(userID string, role Role) error {
 // AddPermissionToRole 为角色添加权限
 func (rbac *RBAC) AddPermissionToRole(role Role, permission Permission) error {
 	rbac.mu.Lock()
-	defer rbac.Unlock()
+	defer rbac.mu.Unlock()
 
 	// 更新角色权限
 	permissions := rbac.rolePermissions[role]
@@ -325,7 +326,7 @@ func (rbac *RBAC) AddPermissionToRole(role Role, permission Permission) error {
 // RemovePermissionFromRole 从角色移除权限
 func (rbac *RBAC) RemovePermissionFromRole(role Role, permission Permission) error {
 	rbac.mu.Lock()
-	defer rbac.Unlock()
+	defer rbac.mu.Unlock()
 
 	// 更新角色权限
 	permissions := rbac.rolePermissions[role]
@@ -361,12 +362,12 @@ func (rbac *RBAC) RemovePermissionFromRole(role Role, permission Permission) err
 func (rbac *RBAC) clearUserCache(userID string) {
 	// 清除角色缓存
 	rbac.cache.Delete(context.Background(), fmt.Sprintf("user_role:%s", userID))
-	
+
 	// 清除权限缓存
 	for _, perm := range rbac.rolePermissions[rbac.userRoles[userID]] {
 		rbac.cache.Delete(context.Background(), fmt.Sprintf("user_permission:%s:%s", userID, perm))
 	}
-	
+
 	// 清除权限列表缓存
 	rbac.cache.Delete(context.Background(), fmt.Sprintf("user_permissions:%s", userID))
 }
@@ -374,14 +375,14 @@ func (rbac *RBAC) clearUserCache(userID string) {
 // GetRolePermissions 获取角色权限
 func (rbac *RBAC) GetRolePermissions(role Role) []Permission {
 	rbac.mu.RLock()
-	defer rbac.RUnlock()
+	defer rbac.mu.RUnlock()
 	return rbac.rolePermissions[role]
 }
 
 // GetUsersByRole 获取拥有指定角色的用户
 func (rbac *RBAC) GetUsersByRole(role Role) []string {
 	rbac.mu.RLock()
-	defer rbac.RUnlock()
+	defer rbac.mu.RUnlock()
 
 	var users []string
 	for userID, userRole := range rbac.userRoles {
@@ -493,16 +494,16 @@ func (rm *RoleMiddleware) Middleware() gin.HandlerFunc {
 
 // MultiPermissionMiddleware 多权限检查中间件
 type MultiPermissionMiddleware struct {
-	rbac      *RBAC
-	required []Permission
+	rbac       *RBAC
+	required   []Permission
 	requireAll bool // true: 需要所有权限，false: 需要任意权限
 }
 
 // NewMultiPermissionMiddleware 创建多权限检查中间件
 func NewMultiPermissionMiddleware(rbac *RBAC, required []Permission, requireAll bool) *MultiPermissionMiddleware {
 	return &MultiPermissionMiddleware{
-		rbac:      rbac,
-		required: required,
+		rbac:       rbac,
+		required:   required,
 		requireAll: requireAll,
 	}
 }
@@ -541,9 +542,9 @@ func (mpm *MultiPermissionMiddleware) Middleware() gin.HandlerFunc {
 
 		if !hasPermission {
 			c.JSON(http.StatusForbidden, gin.H{
-				"error": "permission denied",
+				"error":                "permission denied",
 				"required_permissions": mpm.required,
-				"require_all":       mpm.requireAll,
+				"require_all":          mpm.requireAll,
 			})
 			c.Abort()
 			return
@@ -603,7 +604,7 @@ func (om *OwnershipMiddleware) Middleware() gin.HandlerFunc {
 func (om *OwnershipMiddleware) checkOwnership(userID, resourceID, path string) bool {
 	// 简化实现：用户只能访问自己的资源
 	// 实际项目中应该查询数据库验证所有权
-	
+
 	// 如果是管理员，可以访问所有资源
 	if role, err := om.rbac.GetUserRole(userID); err == nil {
 		if role == RoleAdmin || role == RoleSuperAdmin {
@@ -638,10 +639,10 @@ type Policy interface {
 
 // PolicyRequest 策略请求
 type PolicyRequest struct {
-	UserID     string
-	Resource   string
-	Action     string
-	Context    map[string]interface{}
+	UserID   string
+	Resource string
+	Action   string
+	Context  map[string]interface{}
 }
 
 // PolicyDecision 策略决定
@@ -768,7 +769,7 @@ func (tbp *TimeBasedPolicy) Evaluate(ctx context.Context, request PolicyRequest)
 				allowed = true
 				break
 			}
-	}
+		}
 		if !allowed {
 			return DecisionDeny, nil
 		}
@@ -797,7 +798,7 @@ func NewLocationPolicy(allowedCountries, allowedIPs, blockedIPs []string) *Locat
 func (lp *LocationPolicy) Evaluate(ctx context.Context, request PolicyRequest) (PolicyDecision, error) {
 	// 这里可以实现实际的地理位置检查
 	// 为了简化，我们只检查 IP
-	
+
 	// 检查是否被阻止
 	for _, blockedIP := range lp.blockedIPs {
 		if request.Context["ip"] == blockedIP {

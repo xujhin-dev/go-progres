@@ -26,8 +26,8 @@ func (m *PaymentModule) Priority() int {
 }
 
 func (m *PaymentModule) Init(ctx *registry.ModuleContext) error {
-	// 1. 依赖注入 - 使用 SQLX 仓库
-	pRepo := repository.NewPaymentRepository(ctx.DB)
+	// 1. 依赖注入 - 使用简化仓库
+	pRepo := repository.NewSimplePaymentRepository(ctx.DB)
 
 	// 暂时使用 nil 作为用户服务，后续可以修复
 	paymentService := service.NewPaymentService(pRepo, nil)

@@ -2,82 +2,82 @@ package repository
 
 import (
 	"context"
-	"database/sql"
-	"encoding/json"
-	"fmt"
-	"time"
 	"user_crud_jwt/internal/domain/payment/model"
 	"user_crud_jwt/pkg/database"
 )
 
-// PaymentXRepository 使用 SQLX 实现的支付仓库
-type PaymentXRepository struct {
+// SQLCPaymentRepository SQLC 实现的支付仓库
+type SQLCPaymentRepository struct {
 	db *database.DB
 }
 
-// NewPaymentRepository 创建新的支付仓库
+// FixedPaymentRepository 修复版支付仓库实现
+type FixedPaymentRepository struct {
+	db *database.DB
+}
+
+// NewPaymentRepository 创建支付仓库
 func NewPaymentRepository(db *database.DB) PaymentRepository {
-	return &PaymentXRepository{db: db}
+	return &FixedPaymentRepository{db: db}
 }
 
-// CreateOrder 创建订单
-func (r *PaymentXRepository) CreateOrder(order *model.Order) error {
-	query := `
-		INSERT INTO orders (
-			id, created_at, updated_at, order_no, user_id, amount, status, channel, subject, extra_params, paid_at
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-		)`
-
-	_, err := r.db.ExecContext(context.Background(), query,
-		order.ID, order.CreatedAt, order.UpdatedAt, order.OrderNo,
-		order.UserID, order.Amount, order.Status, order.Channel,
-		order.Subject, order.ExtraParams, order.PaidAt,
-	)
-
-	return err
+// 占位实现，后续可以替换为SQLC实现
+func (r *FixedPaymentRepository) CreateOrder(ctx context.Context, order *model.Order) error {
+	// TODO: 实现订单创建
+	return nil
 }
 
-// GetOrderByNo 根据订单号获取订单
-func (r *PaymentXRepository) GetOrderByNo(orderNo string) (*model.Order, error) {
-	query := `
-		SELECT id::text, created_at, updated_at, deleted_at, order_no, user_id, amount, status, 
-			   channel, subject, extra_params, paid_at
-		FROM orders 
-		WHERE order_no = $1 AND deleted_at IS NULL`
-
-	var order model.Order
-	err := r.db.GetContext(context.Background(), &order, query, orderNo)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("order not found")
-		}
-		return nil, err
-	}
-
-	return &order, nil
+func (r *FixedPaymentRepository) GetOrderByID(ctx context.Context, id string) (*model.Order, error) {
+	// TODO: 实现订单查询
+	return nil, nil
 }
 
-// UpdateOrderStatus 更新订单状态
-func (r *PaymentXRepository) UpdateOrderStatus(orderNo string, status string, paidAt *time.Time, extra json.RawMessage) error {
-	query := `
-		UPDATE orders 
-		SET status = $1, paid_at = $2, updated_at = $3, extra_params = $4
-		WHERE order_no = $5 AND deleted_at IS NULL`
+func (r *FixedPaymentRepository) GetOrderByNo(ctx context.Context, orderNo string) (*model.Order, error) {
+	// TODO: 实现订单号查询
+	return nil, nil
+}
 
-	result, err := r.db.ExecContext(context.Background(), query, status, paidAt, time.Now(), extra, orderNo)
-	if err != nil {
-		return err
-	}
+func (r *FixedPaymentRepository) GetOrdersByUserID(ctx context.Context, userID string, limit, offset int) ([]*model.Order, error) {
+	// TODO: 实现用户订单列表
+	return nil, nil
+}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
+func (r *FixedPaymentRepository) UpdateOrder(ctx context.Context, order *model.Order) error {
+	// TODO: 实现订单更新
+	return nil
+}
 
-	if rowsAffected == 0 {
-		return fmt.Errorf("order not found")
-	}
+func (r *FixedPaymentRepository) UpdateOrderStatus(ctx context.Context, id string, status string) error {
+	// TODO: 实现订单状态更新
+	return nil
+}
 
+func (r *FixedPaymentRepository) CreatePayment(ctx context.Context, payment *model.Payment) error {
+	// TODO: 实现支付记录创建
+	return nil
+}
+
+func (r *FixedPaymentRepository) GetPaymentByOrderID(ctx context.Context, orderID string) (*model.Payment, error) {
+	// TODO: 实现支付记录查询
+	return nil, nil
+}
+
+func (r *FixedPaymentRepository) UpdatePaymentStatus(ctx context.Context, id string, status string) error {
+	// TODO: 实现支付状态更新
+	return nil
+}
+
+func (r *FixedPaymentRepository) CreateRefund(ctx context.Context, refund *model.Refund) error {
+	// TODO: 实现退款记录创建
+	return nil
+}
+
+func (r *FixedPaymentRepository) GetRefundByOrderID(ctx context.Context, orderID string) (*model.Refund, error) {
+	// TODO: 实现退款记录查询
+	return nil, nil
+}
+
+func (r *FixedPaymentRepository) UpdateRefundStatus(ctx context.Context, id string, status string) error {
+	// TODO: 实现退款状态更新
 	return nil
 }

@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"log"
 	"time"
 	"user_crud_jwt/internal/domain/coupon/model"
@@ -14,11 +15,11 @@ type CouponTask struct {
 }
 
 type WorkerPool struct {
-	TaskQueue   chan CouponTask
-	RetryQueue  chan CouponTask // 重试队列
-	Repo        repository.CouponRepository
-	WorkerNum   int
-	MaxRetry    int // 最大重试次数
+	TaskQueue  chan CouponTask
+	RetryQueue chan CouponTask // 重试队列
+	Repo       repository.CouponRepository
+	WorkerNum  int
+	MaxRetry   int // 最大重试次数
 }
 
 func NewWorkerPool(repo repository.CouponRepository, workerNum int, bufferSize int) *WorkerPool {
@@ -43,7 +44,7 @@ func (p *WorkerPool) Start() {
 func (p *WorkerPool) worker(id int) {
 	for task := range p.TaskQueue {
 		if err := p.processTask(task); err != nil {
-			log.Printf("[Worker %d] Failed to process task (UserID: %d, CouponID: %d): %v",
+			log.Printf("[Worker %d] Failed to process task (UserID: %s, CouponID: %s): %v",
 				id, task.UserID, task.CouponID, err)
 
 			// 如果未达到最大重试次数，加入重试队列
@@ -85,7 +86,7 @@ func (p *WorkerPool) retryWorker() {
 
 func (p *WorkerPool) processTask(task CouponTask) error {
 	// 执行数据库写入操作
-	if err := p.Repo.DecreaseStock(task.CouponID); err != nil {
+	if err := p.Repo.DecreaseStock(context.Background(), task.CouponID); err != nil {
 		return err
 	}
 
@@ -95,7 +96,7 @@ func (p *WorkerPool) processTask(task CouponTask) error {
 		Status:   1, // 1: 未使用
 	}
 
-	if err := p.Repo.CreateUserCoupon(userCoupon); err != nil {
+	if err := p.Repo.CreateUserCoupon(context.Background(), userCoupon); err != nil {
 		return err
 	}
 
@@ -105,7 +106,7 @@ func (p *WorkerPool) processTask(task CouponTask) error {
 func (p *WorkerPool) logFailedTask(task CouponTask, err error) {
 	// TODO: 实现死信队列或持久化存储
 	// 可以写入文件、数据库或消息队列
-	log.Printf("[DeadLetter] Task failed permanently: UserID=%d, CouponID=%d, Error=%v",
+	log.Printf("[DeadLetter] Task failed permanently: UserID=%s, CouponID=%s, Error=%v",
 		task.UserID, task.CouponID, err)
 }
 

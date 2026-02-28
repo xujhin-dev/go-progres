@@ -318,7 +318,7 @@ func (smm *SecurityMonitoringMiddleware) Middleware() gin.HandlerFunc {
 		c.Next()
 
 		// 在请求处理后检查安全事件
-		sm.checkSecurityEvents(c)
+		smm.checkSecurityEvents(c)
 	}
 }
 
