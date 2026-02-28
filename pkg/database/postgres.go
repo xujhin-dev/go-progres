@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"log"
 	"time"
+
 	"user_crud_jwt/internal/pkg/config"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
 )
 
 // DB wraps sqlx.DB for additional functionality
@@ -25,8 +26,8 @@ func InitDatabase() *DB {
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=%s",
 		cfg.Host, cfg.User, cfg.Password, cfg.DBName, cfg.Port, cfg.SSLMode, cfg.TimeZone)
 
-	// Connect using postgres driver
-	db, err := sqlx.Connect("postgres", dsn)
+	// Connect using pgx driver
+	db, err := sqlx.Connect("pgx", dsn)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
