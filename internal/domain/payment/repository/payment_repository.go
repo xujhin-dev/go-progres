@@ -1,48 +1,83 @@
 package repository
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 	"user_crud_jwt/internal/domain/payment/model"
-
-	"gorm.io/gorm"
+	"user_crud_jwt/pkg/database"
 )
 
-type PaymentRepository interface {
-	CreateOrder(order *model.Order) error
-	GetOrderByNo(orderNo string) (*model.Order, error)
-	UpdateOrderStatus(orderNo string, status string, paidAt *time.Time, extra json.RawMessage) error
+// PaymentXRepository 使用 SQLX 实现的支付仓库
+type PaymentXRepository struct {
+	db *database.DB
 }
 
-type paymentRepository struct {
-	db *gorm.DB
+// NewPaymentRepository 创建新的支付仓库
+func NewPaymentRepository(db *database.DB) PaymentRepository {
+	return &PaymentXRepository{db: db}
 }
 
-func NewPaymentRepository(db *gorm.DB) PaymentRepository {
-	return &paymentRepository{db: db}
+// CreateOrder 创建订单
+func (r *PaymentXRepository) CreateOrder(order *model.Order) error {
+	query := `
+		INSERT INTO orders (
+			id, created_at, updated_at, order_no, user_id, amount, status, channel, subject, extra_params, paid_at
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+		)`
+
+	_, err := r.db.ExecContext(context.Background(), query,
+		order.ID, order.CreatedAt, order.UpdatedAt, order.OrderNo,
+		order.UserID, order.Amount, order.Status, order.Channel,
+		order.Subject, order.ExtraParams, order.PaidAt,
+	)
+
+	return err
 }
 
-func (r *paymentRepository) CreateOrder(order *model.Order) error {
-	return r.db.Create(order).Error
-}
+// GetOrderByNo 根据订单号获取订单
+func (r *PaymentXRepository) GetOrderByNo(orderNo string) (*model.Order, error) {
+	query := `
+		SELECT id::text, created_at, updated_at, deleted_at, order_no, user_id, amount, status, 
+			   channel, subject, extra_params, paid_at
+		FROM orders 
+		WHERE order_no = $1 AND deleted_at IS NULL`
 
-func (r *paymentRepository) GetOrderByNo(orderNo string) (*model.Order, error) {
 	var order model.Order
-	if err := r.db.Where("order_no = ?", orderNo).First(&order).Error; err != nil {
+	err := r.db.GetContext(context.Background(), &order, query, orderNo)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("order not found")
+		}
 		return nil, err
 	}
+
 	return &order, nil
 }
 
-func (r *paymentRepository) UpdateOrderStatus(orderNo string, status string, paidAt *time.Time, extra json.RawMessage) error {
-	updates := map[string]interface{}{
-		"status": status,
+// UpdateOrderStatus 更新订单状态
+func (r *PaymentXRepository) UpdateOrderStatus(orderNo string, status string, paidAt *time.Time, extra json.RawMessage) error {
+	query := `
+		UPDATE orders 
+		SET status = $1, paid_at = $2, updated_at = $3, extra_params = $4
+		WHERE order_no = $5 AND deleted_at IS NULL`
+
+	result, err := r.db.ExecContext(context.Background(), query, status, paidAt, time.Now(), extra, orderNo)
+	if err != nil {
+		return err
 	}
-	if paidAt != nil {
-		updates["paid_at"] = paidAt
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
 	}
-	if extra != nil {
-		updates["extra_params"] = extra
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("order not found")
 	}
-	return r.db.Model(&model.Order{}).Where("order_no = ?", orderNo).Updates(updates).Error
+
+	return nil
 }

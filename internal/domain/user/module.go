@@ -29,8 +29,8 @@ func (m *UserModule) Priority() int {
 }
 
 func (m *UserModule) Init(ctx *registry.ModuleContext) error {
-	// 1. 依赖注入 - 使用 SQLC 仓库
-	userRepo := repository.NewSQLCUserRepository(ctx.DB)
+	// 1. 依赖注入 - 使用 SQLX 仓库
+	userRepo := repository.NewUserRepository(ctx.DB)
 	otpService := otp.NewOTPService(ctx.Redis) // 假设 ModuleContext 中有 Redis 客户端
 	userService := service.NewUserService(userRepo, otpService)
 	userHandler := handler.NewUserHandler(userService)

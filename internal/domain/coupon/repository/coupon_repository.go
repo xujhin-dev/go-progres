@@ -1,63 +1,113 @@
 package repository
 
 import (
-	"errors"
+	"context"
+	"database/sql"
+	"fmt"
+	"time"
 	"user_crud_jwt/internal/domain/coupon/model"
-
-	"gorm.io/gorm"
+	"user_crud_jwt/pkg/database"
 )
 
-type CouponRepository interface {
-	Create(coupon *model.Coupon) error
-	GetByID(id string) (*model.Coupon, error)
-	DecreaseStock(couponID string) error
-	CreateUserCoupon(userCoupon *model.UserCoupon) error
-	HasUserClaimed(userID, couponID string) (bool, error)
+// CouponXRepository 使用 SQLX 实现的优惠券仓库
+type CouponXRepository struct {
+	db *database.DB
 }
 
-type couponRepository struct {
-	db *gorm.DB
+// NewCouponRepository 创建新的优惠券仓库
+func NewCouponRepository(db *database.DB) CouponRepository {
+	return &CouponXRepository{db: db}
 }
 
-func NewCouponRepository(db *gorm.DB) CouponRepository {
-	return &couponRepository{db: db}
+// Create 创建优惠券
+func (r *CouponXRepository) Create(coupon *model.Coupon) error {
+	query := `
+		INSERT INTO coupons (
+			id, created_at, updated_at, name, total, stock, amount, start_time, end_time
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9
+		)`
+
+	_, err := r.db.ExecContext(context.Background(), query,
+		coupon.ID, coupon.CreatedAt, coupon.UpdatedAt, coupon.Name,
+		coupon.Total, coupon.Stock, coupon.Amount, coupon.StartTime, coupon.EndTime,
+	)
+
+	return err
 }
 
-func (r *couponRepository) Create(coupon *model.Coupon) error {
-	return r.db.Create(coupon).Error
-}
+// GetByID 根据 ID 获取优惠券
+func (r *CouponXRepository) GetByID(id string) (*model.Coupon, error) {
+	query := `
+		SELECT id::text, created_at, updated_at, deleted_at, name, total, stock, amount, start_time, end_time
+		FROM coupons 
+		WHERE id = $1 AND deleted_at IS NULL`
 
-func (r *couponRepository) GetByID(id string) (*model.Coupon, error) {
 	var coupon model.Coupon
-	if err := r.db.Where("id = ?", id).First(&coupon).Error; err != nil {
+	err := r.db.GetContext(context.Background(), &coupon, query, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("coupon not found")
+		}
 		return nil, err
 	}
+
 	return &coupon, nil
 }
 
-// DecreaseStock 乐观锁扣减库存
-func (r *couponRepository) DecreaseStock(couponID string) error {
-	result := r.db.Model(&model.Coupon{}).
-		Where("id = ? AND stock > 0", couponID).
-		UpdateColumn("stock", gorm.Expr("stock - 1"))
+// DecreaseStock 减少优惠券库存
+func (r *CouponXRepository) DecreaseStock(couponID string) error {
+	query := `
+		UPDATE coupons 
+		SET stock = stock - 1, updated_at = $1
+		WHERE id = $2 AND deleted_at IS NULL AND stock > 0`
 
-	if result.Error != nil {
-		return result.Error
+	result, err := r.db.ExecContext(context.Background(), query, time.Now(), couponID)
+	if err != nil {
+		return err
 	}
-	if result.RowsAffected == 0 {
-		return errors.New("insufficient stock")
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
 	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("coupon not found or insufficient stock")
+	}
+
 	return nil
 }
 
-func (r *couponRepository) CreateUserCoupon(userCoupon *model.UserCoupon) error {
-	return r.db.Create(userCoupon).Error
+// CreateUserCoupon 创建用户优惠券关联
+func (r *CouponXRepository) CreateUserCoupon(userCoupon *model.UserCoupon) error {
+	query := `
+		INSERT INTO user_coupons (
+			id, created_at, updated_at, user_id, coupon_id, status
+		) VALUES (
+			$1, $2, $3, $4, $5, $6
+		)`
+
+	_, err := r.db.ExecContext(context.Background(), query,
+		userCoupon.ID, userCoupon.CreatedAt, userCoupon.UpdatedAt,
+		userCoupon.UserID, userCoupon.CouponID, userCoupon.Status,
+	)
+
+	return err
 }
 
-func (r *couponRepository) HasUserClaimed(userID, couponID string) (bool, error) {
+// HasUserClaimed 检查用户是否已领取优惠券
+func (r *CouponXRepository) HasUserClaimed(userID, couponID string) (bool, error) {
+	query := `
+		SELECT COUNT(*) 
+		FROM user_coupons 
+		WHERE user_id = $1 AND coupon_id = $2 AND deleted_at IS NULL`
+
 	var count int64
-	err := r.db.Model(&model.UserCoupon{}).
-		Where("user_id = ? AND coupon_id = ?", userID, couponID).
-		Count(&count).Error
-	return count > 0, err
+	err := r.db.GetContext(context.Background(), &count, query, userID, couponID)
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
 }

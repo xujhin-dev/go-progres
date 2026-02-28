@@ -5,14 +5,12 @@ import (
 	"errors"
 	"user_crud_jwt/internal/domain/moment/model"
 	"user_crud_jwt/internal/domain/moment/repository"
-
-	"gorm.io/gorm"
 )
 
 type MomentService interface {
 	PublishPost(userID string, content string, mediaURLs []string, postType string, topicNames []string) (*model.Post, error)
 	AuditPost(postID string, status string) error
-	GetFeed(page, limit int) ([]model.Post, int64, error) // Get approved posts
+	GetFeed(page, limit int) ([]model.Post, int64, error)         // Get approved posts
 	GetPendingPosts(page, limit int) ([]model.Post, int64, error) // For admin
 
 	AddComment(userID, postID string, content string, parentID string) (*model.Comment, error)
@@ -41,7 +39,7 @@ func (s *momentService) PublishPost(userID string, content string, mediaURLs []s
 	for _, name := range topicNames {
 		topic, err := s.repo.GetTopicByName(name)
 		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
+			if err.Error() == "topic not found" {
 				topic = &model.Topic{Name: name}
 				if err := s.repo.CreateTopic(topic); err != nil {
 					return nil, err

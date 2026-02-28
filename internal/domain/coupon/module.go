@@ -26,35 +26,28 @@ func (m *CouponModule) Priority() int {
 }
 
 func (m *CouponModule) Init(ctx *registry.ModuleContext) error {
-	// 1. 依赖注入
+	// 1. 依赖注入 - 使用 SQLX 仓库
 	cRepo := repository.NewCouponRepository(ctx.DB)
-	cService := service.NewCouponService(cRepo, ctx.Redis)
-	cHandler := handler.NewCouponHandler(cService)
+	couponService := service.NewCouponService(cRepo, ctx.Redis)
+	couponHandler := handler.NewCouponHandler(couponService)
 
 	// 2. 路由注册
-	setupRoutes(ctx.Router, cHandler)
+	setupRoutes(ctx.Router, couponHandler)
 
 	return nil
 }
 
 func setupRoutes(r *gin.Engine, h *handler.CouponHandler) {
-	g := r.Group("/coupons")
-
-	// 需要认证的路由组
-	authorized := g.Group("")
-	authorized.Use(middleware.AuthMiddleware())
+	// 公开路由
+	couponGroup := r.Group("/coupons")
 	{
-		// 抢券需要登录
-		authorized.POST("/:id/claim", h.ClaimCoupon)
+		couponGroup.POST("/", h.CreateCoupon)
+	}
 
-		// 需要管理员权限的路由组
-		admin := authorized.Group("")
-		admin.Use(middleware.AdminMiddleware())
-		{
-			// 创建优惠券
-			admin.POST("/", h.CreateCoupon)
-			// 管理员给用户发券
-			admin.POST("/send", h.SendCoupon)
-		}
+	// 受保护的路由
+	protectedGroup := r.Group("/coupons")
+	protectedGroup.Use(middleware.AuthMiddleware())
+	{
+		protectedGroup.POST("/:id/claim", h.ClaimCoupon)
 	}
 }
