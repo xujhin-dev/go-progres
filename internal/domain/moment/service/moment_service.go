@@ -38,18 +38,25 @@ func (s *momentService) PublishPost(userID string, content string, mediaURLs []s
 	// 2. Handle Topics
 	var topics []model.Topic
 	for _, name := range topicNames {
+		if name == "" {
+			continue // 跳过空话题名
+		}
+
 		topic, err := s.repo.GetTopicByName(context.Background(), name)
 		if err != nil {
 			if err.Error() == "topic not found" {
-				topic = &model.Topic{Name: name}
-				if err := s.repo.CreateTopic(context.Background(), topic); err != nil {
+				newTopic := &model.Topic{Name: name}
+				if err := s.repo.CreateTopic(context.Background(), newTopic); err != nil {
 					return nil, err
 				}
+				topics = append(topics, *newTopic)
 			} else {
 				return nil, err
 			}
+		} else {
+			// 只有当topic不为nil时才添加
+			topics = append(topics, *topic)
 		}
-		topics = append(topics, *topic)
 	}
 
 	post := &model.Post{
@@ -103,12 +110,14 @@ func (s *momentService) GetPendingPosts(page, limit int) ([]model.Post, int64, e
 }
 
 func (s *momentService) AddComment(userID, postID string, content string, parentID string) (*model.Comment, error) {
-	// Check if post exists and is approved
+	// Check if post exists
 	post, err := s.repo.GetPostByID(context.Background(), postID)
 	if err != nil {
 		return nil, err
 	}
-	if post.Status != "approved" {
+
+	// Allow comments if: 1) post is approved, OR 2) user is commenting on their own post
+	if post.Status != "approved" && post.UserID != userID {
 		return nil, errors.New("cannot comment on unapproved post")
 	}
 

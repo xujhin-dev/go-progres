@@ -1,0 +1,187 @@
+package service
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
+	momentModel "user_crud_jwt/internal/domain/moment/model"
+	momentRepo "user_crud_jwt/internal/domain/moment/repository"
+	userModel "user_crud_jwt/internal/domain/user/model"
+	userRepo "user_crud_jwt/internal/domain/user/repository"
+	"user_crud_jwt/pkg/rate_limiter"
+
+	"github.com/go-redis/redis/v8"
+)
+
+// MomentWithUserService 包含用户信息的动态服务
+type MomentWithUserService struct {
+	momentRepo momentRepo.MomentRepository
+	userRepo   userRepo.UserRepository
+	commentLimiter rate_limiter.RateLimiter
+	likeLimiter   rate_limiter.RateLimiter
+}
+
+// NewMomentWithUserService 创建包含用户信息的动态服务
+func NewMomentWithUserService(momentRepo momentRepo.MomentRepository, userRepo userRepo.UserRepository, redisClient *redis.Client) *MomentWithUserService {
+	commentLimiter := rate_limiter.NewRedisRateLimiter(redisClient, time.Minute, 10)
+	likeLimiter := rate_limiter.NewRedisRateLimiter(redisClient, time.Minute, 50)
+	
+	return &MomentWithUserService{
+		momentRepo:    momentRepo,
+		userRepo:      userRepo,
+		commentLimiter: commentLimiter,
+		likeLimiter:    likeLimiter,
+	}
+}
+
+// getUserInfo 获取用户信息
+func (s *MomentWithUserService) getUserInfo(userID string) (*momentModel.UserInfo, error) {
+	user, err := s.userRepo.GetByID(context.Background(), userID)
+	if err != nil {
+		return nil, err
+	}
+	
+	return &momentModel.UserInfo{
+		ID:       user.ID,
+		Username: user.Username,
+		Mobile:   user.Mobile,
+		Avatar:   user.Avatar,
+		Role:     user.Role,
+	}, nil
+}
+
+// AddCommentWithUser 添加评论（带用户信息）
+func (s *MomentWithUserService) AddCommentWithUser(userID, postID string, content string, parentID string) (*momentModel.CommentWithUser, error) {
+	// 限流检查
+	limiterKey := fmt.Sprintf("comment:%s", userID)
+	if !s.commentLimiter.Allow(limiterKey) {
+		return nil, errors.New("评论过于频繁，请稍后再试")
+	}
+
+	// 检查动态是否存在且已审核
+	post, err := s.momentRepo.GetPostByID(context.Background(), postID)
+	if err != nil {
+		return nil, fmt.Errorf("动态不存在: %w", err)
+	}
+	if post.Status != "approved" {
+		return nil, errors.New("无法评论未审核的动态")
+	}
+
+	// 获取用户信息
+	userInfo, err := s.getUserInfo(userID)
+	if err != nil {
+		return nil, fmt.Errorf("获取用户信息失败: %w", err)
+	}
+
+	comment := &momentModel.Comment{
+		PostID:   postID,
+		UserID:   userID,
+		Content:  content,
+		Level:    1,
+		User:      userInfo,
+		ReplyCount: 0,
+	}
+
+	// 处理回复逻辑
+	if parentID != "" {
+		parentComment, err := s.momentRepo.GetCommentByID(context.Background(), parentID)
+		if err != nil {
+			return nil, errors.New("父评论不存在")
+		}
+
+		if parentComment.PostID != postID {
+			return nil, errors.New("父评论不属于此动态")
+		}
+
+		comment.ParentID = parentID
+
+		if parentComment.Level == 1 {
+			comment.RootID = parentComment.ID
+			comment.Level = 2
+		} else {
+			comment.RootID = parentComment.RootID
+			comment.Level = 2
+		}
+	}
+
+	if err := s.momentRepo.CreateComment(context.Background(), comment); err != nil {
+		return nil, fmt.Errorf("创建评论失败: %w", err)
+	}
+
+	return &momentModel.CommentWithUser{
+		Comment: *comment,
+		Replies: []momentModel.CommentWithUser{},
+	}, nil
+}
+
+// ToggleLikeWithUser 点赞/取消点赞（带用户信息）
+func (s *MomentWithUserService) ToggleLikeWithUser(userID, targetID string, targetType string) (*momentModel.LikeWithUser, error) {
+	// 限流检查
+	limiterKey := fmt.Sprintf("like:%s", userID)
+	if !s.likeLimiter.Allow(limiterKey) {
+		return nil, errors.New("点赞过于频繁，请稍后再试")
+	}
+
+	// 检查目标是否存在
+	if targetType == "post" {
+		post, err := s.momentRepo.GetPostByID(context.Background(), targetID)
+		if err != nil {
+			return nil, fmt.Errorf("动态不存在: %w", err)
+		}
+		if post.Status != "approved" {
+			return nil, errors.New("无法点赞未审核的动态")
+		}
+	} else if targetType == "comment" {
+		_, err := s.momentRepo.GetCommentByID(context.Background(), targetID)
+		if err != nil {
+			return nil, fmt.Errorf("评论不存在: %w", err)
+		}
+	} else {
+		return nil, errors.New("无效的点赞类型")
+	}
+
+	// 获取用户信息
+	userInfo, err := s.getUserInfo(userID)
+	if err != nil {
+		return nil, fmt.Errorf("获取用户信息失败: %w", err)
+	}
+
+	liked, err := s.momentRepo.HasLiked(context.Background(), userID, targetID)
+	if err != nil {
+		return nil, fmt.Errorf("检查点赞状态失败: %w", err)
+	}
+
+	if liked {
+		// 取消点赞
+		err := s.momentRepo.DeleteLike(context.Background(), userID, targetID, targetType)
+		if err != nil {
+			return nil, fmt.Errorf("取消点赞失败: %w", err)
+		}
+		
+		return &momentModel.LikeWithUser{
+			Like: momentModel.Like{UserID: userID, TargetID: targetID, TargetType: targetType},
+			User: userInfo,
+			IsLiked: false,
+		}, nil
+	} else {
+		// 点赞
+		like := &momentModel.Like{
+			UserID:     userID,
+			TargetID:   targetID,
+			TargetType: targetType,
+		}
+		
+		err := s.momentRepo.CreateLike(context.Background(), like)
+		if err != nil {
+			return nil, fmt.Errorf("点赞失败: %w", err)
+		}
+		
+		return &momentModel.LikeWithUser{
+			Like:    *like,
+			User:    userInfo,
+			IsLiked: true,
+		}, nil
+	}
+}
